@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdbool.h>
 
-typedef char *string;
+typedef const char *string;
 
 #define TRUE 1
 #define FALSE 0
