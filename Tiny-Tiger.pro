@@ -36,7 +36,8 @@ SOURCES += \
     src/table.c \
     src/symbol.c \
     src/errormsg.c \
-    src/absyn.c
+    src/absyn.c \
+    src/types.c
 
 HEADERS += \
     src/mainwindow.h \
@@ -44,7 +45,8 @@ HEADERS += \
     src/table.h \
     src/symbol.h \
     src/errormsg.h \
-    src/absyn.h
+    src/absyn.h \
+    src/types.h
 
 OTHER_FILES += \
     src/tiger.l \
