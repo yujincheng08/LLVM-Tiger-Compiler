@@ -21,4 +21,4 @@ struct U_boolList_ {
 };
 U_boolList UboolList(bool head, U_boolList tail);
 
-#endif //UTIL_H
+#endif  // UTIL_H
