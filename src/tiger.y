@@ -1,9 +1,11 @@
 %{
 #include <stdio.h>
+extern "C"{
 #include "util.h"
 #include "symbol.h"
 #include "errormsg.h"
 #include "absyn.h"
+}
 
 int yylex(void); /* function prototype */
 

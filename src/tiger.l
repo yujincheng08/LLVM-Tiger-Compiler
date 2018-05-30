@@ -1,18 +1,24 @@
 %{
-    #include <string.h>
-    #include "errormsg.h"
+#include <string.h>
+#include <unistd.h>
+extern "C" {
+#include "errormsg.h"
+#include "symbol.h"
+#include "absyn.h"
+#include "util.h"
 }
+#include "tiger_yacc.h"
 
 #define BUFSIZE 65535
 #define ADJ {EM_tokPos=charPos; charPos+=yyleng;}
 
 int charPos = 1;
-char strbuf(BUFSIZE+1);
+char strbuf[BUFSIZE+1];
 char *strptr = NULL;
-unsinged int strlength = 0;
+unsigned int strlength = 0;
 int commentDepth = 0;
 
-int yywrap(void)
+extern "C" int yywrap(void)
 {
  charPos=1;
  return 1;
@@ -24,12 +30,12 @@ void setup(void)
 	strlength = 0;
 }
 
-void append(char *str)
+void append(string str)
 {
-    if (strLen + strlen(str) < BUFSIZE)
+    if (strlength + strlen(str) < BUFSIZE)
     {
         strcat(strbuf, str);
-        strLen += strlen(str);
+        strlength += strlen(str);
     }
     else
     {
@@ -68,8 +74,8 @@ void append(char *str)
 "type"     {ADJ; return TYPE;}
 "while"    {ADJ; return WHILE;}
 "var"      {ADJ; return VAR;}
-[a-zA-Z][a-zA-Z0-9_]*    {ADJ; yylval.sval=yytext; return ID;}
-[0-9]+	   {ADJ; yylval.ival=atoi(yytext); return INT;}
+[a-zA-Z][a-zA-Z0-9_]*    {ADJ; tigerlval.sval=yytext; return ID;}
+[0-9]+	   {ADJ; tigerlval.ival=atoi(yytext); return INT;}
 "+"        {ADJ; return PLUS;}
 "-"        {ADJ; return MINUS;}
 "&"	       {ADJ; return AND;}
@@ -94,10 +100,10 @@ void append(char *str)
 
 \" {ADJ; BEGIN(STR); setup();}
 <STR>{
-	\" 			     {ADJ; yylval.sval=String(strbuf); BEGIN(INITIAL); return STRING;}
+        \" 			     {ADJ; tigerlval.sval=String(strbuf); BEGIN(INITIAL); return STRING;}
 	\\n			     {ADJ; append("\n");}
 	\\t			     {ADJ; append("\t");}
-    \\^[GHIJLM]	     {ADJ; appendstr(yytext);}
+    \\^[GHIJLM]	     {ADJ; append(yytext);}
 	\\[0-9]{3}	     {ADJ; append(yytext);}
 	\\\"    		 {ADJ; append(yytext);}
 	\\[ \n\t\r\f]+\\ {ADJ;}

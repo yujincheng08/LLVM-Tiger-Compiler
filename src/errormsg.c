@@ -59,7 +59,7 @@ void EM_reset(string fname)
 {
  anyErrors=FALSE; fileName=fname; lineNum=1;
  linePos=intList(0,NULL);
- yyin = fopen(fname,"r");
+ FILE *yyin = fopen(fname,"r");
  if (!yyin) {EM_error(0,"cannot open"); exit(1);}
 }
 
