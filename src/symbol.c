@@ -22,9 +22,9 @@ static S_symbol mksymbol(string name, S_symbol next) {
 
 static S_symbol hashtable[SIZE];
 
-static unsigned int hash(char *s0) {
+static unsigned int hash(string s0) {
   unsigned int h = 0;
-  char *s;
+  string s;
   for (s = s0; *s; s++) h = h * 65599 + *s;
   return h;
 }

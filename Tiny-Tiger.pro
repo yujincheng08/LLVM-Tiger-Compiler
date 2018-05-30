@@ -37,7 +37,13 @@ SOURCES += \
     src/symbol.c \
     src/errormsg.c \
     src/absyn.c \
-    src/types.c
+    src/types.c \
+    src/semant.c \
+    src/env.c \
+    src/temp.c \
+    src/tree.c \
+    src/canon.c \
+    src/assem.c
 
 HEADERS += \
     src/mainwindow.h \
@@ -46,7 +52,15 @@ HEADERS += \
     src/symbol.h \
     src/errormsg.h \
     src/absyn.h \
-    src/types.h
+    src/types.h \
+    src/semant.h \
+    src/env.h \
+    src/temp.h \
+    src/tree.h \
+    src/canon.h \
+    src/assem.h \
+    src/translate.h \
+    src/frame.h
 
 OTHER_FILES += \
     src/tiger.l \
