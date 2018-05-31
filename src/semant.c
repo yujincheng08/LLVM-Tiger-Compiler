@@ -90,7 +90,6 @@ static struct expty transExp(S_table venv, S_table tenv, A_exp a) {
       break;
     }
     case A_callExp: {
-
       break;
     }
     case A_opExp: {
@@ -107,11 +106,30 @@ static struct expty transExp(S_table venv, S_table tenv, A_exp a) {
       break;
     }
     case A_recordExp: {
-      return;
+      Ty_ty type = S_look(tenv, a->u.record.typ);
+      if (!type) {
+        EM_error(a->pos, "predefined type required");
+        return dummy_expTy();
+      }
+      type = actual_ty(type);
+      if (type->kind != Ty_record) {
+        EM_error(a->pos, "record required");
+        return dummy_expTy();
+      }
+      Ty_fieldList f = type->u.record;
+      int n = 0;
+      // TODO
       break;
     }
-    case A_seqExp:
-      break;
+    case A_seqExp: {
+      struct expty exp = expTy(Tr_noExp(), Ty_Void());
+      A_expList seq;
+      for (seq = a->u.seq; seq; seq = seq->tail) {
+        exp = transExp(venv, tenv, seq->head);
+        Tr_ExpList_prepend(list, exp.exp);
+      }
+      if (Tr_ExpList_empty(list)) break;
+    }
     case A_assignExp:
       break;
     case A_ifExp:
@@ -129,7 +147,31 @@ static struct expty transExp(S_table venv, S_table tenv, A_exp a) {
   }
   assert(0);
 }
-static void transDec(S_table venv, S_table tenv, A_dec d);
-static Ty_ty transTy(S_table tenv, A_ty a);
+static void transDec(S_table venv, S_table tenv, A_dec d) {
+  switch (d->kind) {
+    case A_functionDec: {
 
-void SEM_transProg(A_exp exp) {}
+      break;
+    }
+    case A_varDec: {
+      struct expty e = transExp(venv, tenv, d->u.var.init);
+      S_enter(venv, d->u.var.var, E_VarEntry(e.ty));
+      break;
+    }
+    case A_typeDec: {
+      S_enter(tenv, d->u.type->head->name, transTy(d->u.type->head->ty));
+      break;
+    }
+  }
+  assert(0);
+}
+static Ty_ty transTy(S_table tenv, A_ty a) {
+
+}
+
+void SEM_transProg(A_exp exp) {
+  S_table tenv = E_base_tenv();
+  S_table venv = E_base_venv();
+  transExp(venv, tenv, exp);
+  return Tr_getResult();
+}
