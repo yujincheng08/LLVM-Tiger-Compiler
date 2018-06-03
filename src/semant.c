@@ -20,6 +20,7 @@ static struct expty expTy(Tr_exp exp, Ty_ty ty) {
 
 static struct expty dummy_expTy() { return expTy(Tr_noExp(), Ty_Int()); }
 
+static Ty_ty transTy(S_table tenv, A_ty a) {}
 static Ty_ty actual_ty(Ty_ty ty) {
   if (ty->kind == Ty_name)
     return actual_ty(ty->u.name.ty);
@@ -96,13 +97,52 @@ static struct expty transExp(S_table venv, S_table tenv, A_exp a) {
       A_oper oper = a->u.op.oper;
       struct expty left = transExp(venv, tenv, a->u.op.left);
       struct expty right = transExp(venv, tenv, a->u.op.right);
-      if (oper == A_plusOp) {
-        if (left.ty->kind != Ty_int)
-          EM_error(a->u.op.left->pos, "interger required");
-        if (right.ty->kind != Ty_int)
-          EM_error(a->u.op.right->pos, "integer required");
-        return expTy(NULL, Ty_Int());
+      struct expty leftTy = actual_ty(left.ty);
+      struct expty rightTy = actual_ty(right.ty);
+      switch (oper) {
+        case A_plusOp:
+        case A_minusOp:
+        case A_timesOp:
+        case A_divideOp: {
+          if (leftTy != Ty_int) {
+            EM_error(a->u.op.left->pos, "interger required");
+            return dummy_expTy();
+          }
+          if (rightTy != Ty_int) {
+            EM_error(a->u.op.right->pos, "integer required");
+            return dummy_expTy();
+          }
+          return expTy(NULL, Ty_Int());
+        }
+        case A_eqOp:
+        case A_neqOp: {
+          if (leftTy == Ty_nil) {
+            EM_error(a->u.op.left->pos, "none-nil required");
+            return dummy_expTy();
+          } else if (rightTy == Ty_nil) {
+            EM_error(a->u.op.right->pos, "none-nil required");
+            return dummy_expTy();
+          } else if (leftTy != rightTy) {
+            EM_error(a->u.op.left->pos, "same types required");
+            return dummy_expTy();
+          }
+          return expTy(NULL, Ty_Int());
+        }
+        case A_ltOp:
+        case A_leOp:
+        case A_gtOp:
+        case A_geOp: {
+          if (leftTy != Ty_int || leftTy != Ty_string) {
+            EM_error(a->u.op.left->pos, "integer or string required");
+            return dummy_expTy();
+          } else if (leftTy != Ty_int || rightTy != Ty_string) {
+            EM_error(a->u.op.right->pos, "integer or string required");
+            return dummy_expTy();
+          }
+          return expTy(NULL, Ty_Int());
+        }
       }
+      assert(0);
       break;
     }
     case A_recordExp: {
@@ -126,31 +166,38 @@ static struct expty transExp(S_table venv, S_table tenv, A_exp a) {
       A_expList seq;
       for (seq = a->u.seq; seq; seq = seq->tail) {
         exp = transExp(venv, tenv, seq->head);
-        Tr_ExpList_prepend(list, exp.exp);
+        // Tr_ExpList_prepend(list, exp.exp);
       }
-      if (Tr_ExpList_empty(list)) break;
+      // if (Tr_ExpList_empty(list)) break;
+      return expTy(NULL, exp.ty);
     }
-    case A_assignExp:
+    case A_assignExp: {
       break;
-    case A_ifExp:
+    }
+    case A_ifExp: {
       break;
-    case A_whileExp:
+    }
+    case A_whileExp: {
       break;
-    case A_forExp:
+    }
+    case A_forExp: {
       break;
-    case A_breakExp:
+    }
+    case A_breakExp: {
       break;
-    case A_letExp:
+    }
+    case A_letExp: {
       break;
-    case A_arrayExp:
+    }
+    case A_arrayExp: {
       break;
+    }
   }
   assert(0);
 }
 static void transDec(S_table venv, S_table tenv, A_dec d) {
   switch (d->kind) {
     case A_functionDec: {
-
       break;
     }
     case A_varDec: {
@@ -159,19 +206,18 @@ static void transDec(S_table venv, S_table tenv, A_dec d) {
       break;
     }
     case A_typeDec: {
-      S_enter(tenv, d->u.type->head->name, transTy(d->u.type->head->ty));
+      A_nametyList nameList;
+      bool cyclic = false;
+      S_enter(tenv, d->u.type->head->name, transTy(venv, d->u.type->head->ty));
       break;
     }
   }
   assert(0);
-}
-static Ty_ty transTy(S_table tenv, A_ty a) {
-
 }
 
 void SEM_transProg(A_exp exp) {
   S_table tenv = E_base_tenv();
   S_table venv = E_base_venv();
   transExp(venv, tenv, exp);
-  return Tr_getResult();
+  // return Tr_getResult();
 }
