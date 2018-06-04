@@ -1,45 +1,30 @@
 %{
-#include <stdio.h>
-extern "C"{
-#include "util.h"
-#include "symbol.h"
-#include "errormsg.h"
-#include "absyn.h"
-}
-
+#include <iostream>
 #include <AST/ast.h>
+#include <llvm/ADT/STLExtras.h>
+using namespace AST;
 
 int yylex(void); /* function prototype */
 
-A_exp absyn_root;
+std::unique_ptr<Node> root;
 
 void yyerror(char *s)
 {
- EM_error(EM_tokPos, "%s", s);
+  std::cerr<<s<<std::endl;
 }
 %}
 
 
 %union {
-        int pos;
-        int ival;
-        string sval;
-        S_symbol sym;
-        A_var var;
-        A_exp exp;
-        A_expList expList;
-        A_ty ty;
-        A_dec dec;
-        A_decList decList;
-        A_field field;
-        A_fieldList fieldList;
-        A_efield efield;
-        A_efieldList efieldList;
-        A_fundec fundec;
-        A_fundecList fundecList;
-        A_namety namety;
-        A_nametyList nametyList;
-        }
+  int pos;
+  int ival;
+  std::string sval;
+  std::unique_ptr<Var> var;
+  std::unique_ptr<Exp> exp;
+  std::unique_ptr<Dec> dec;
+  std::vector<std::unique_ptr<Exp>> expList;
+  std::vector<std::unique_ptr<Dec>> decList;
+}
 
 %token <sval> ID STRING
 %token <ival> INT
@@ -60,7 +45,7 @@ void yyerror(char *s)
 %type <fundec> fundec
 %type <namety> tydec
 %type <efieldList> reclist nonreclist
-%type <sym> id
+%type <std::string> id
 
 %nonassoc LOW
 %nonassoc THEN DO TYPE FUNCTION ID
@@ -76,21 +61,20 @@ void yyerror(char *s)
 
 %%
 
-prog:	    root						        {absyn_root=$1;}
+prog:	    root						        {root=std::move($1);}
                         ;
 
-root:	    /* empty */						    {$$=NULL;}
-                        | exp								{$$=$1;}
-                        ;
+root:	    /* empty */						    {$$=nullptr}
+                        | exp								{$$=$1}
 
-exp:		  INT								{$$=A_IntExp(EM_tokPos, $1);}
-                        | STRING							{$$=A_StringExp(EM_tokPos, $1);}
-                        | NIL								{$$=A_NilExp(EM_tokPos);}
+exp:		          INT								{$$=llvm::make_unique<IntExp>($1);}
+                        | STRING							{$$=llvm::make_unique<StringExp>($1);}
+                        | NIL								{$$=llvm::make_unique<NilExp>();}
                         | lvalue							{$$=A_VarExp(EM_tokPos, $1);}
                         | lvalue ASSIGN exp					{$$=A_AssignExp(EM_tokPos, $1, $3);}
                         | LPAREN explist RPAREN				{$$=A_SeqExp(EM_tokPos, $2);}
-                        | cond						    	{$$=$1;}
-                        | let						    	{$$=$1;}
+                        | cond						    	{$$=$1}
+                        | let						    	{$$=$1}
                         | exp OR exp						{$$=A_IfExp(EM_tokPos, $1, A_IntExp(EM_tokPos,1), $3);}
                         | exp AND exp						{$$=A_IfExp(EM_tokPos, $1, $3, A_IntExp(EM_tokPos,0));}
                         | exp LT exp						{$$=A_OpExp(EM_tokPos, A_ltOp, $1, $3);}
@@ -185,7 +169,7 @@ vardec:		  VAR id ASSIGN exp					{$$=A_VarDec(EM_tokPos, $2, NULL, $4);}
                         | VAR id COLON id ASSIGN exp		{$$=A_VarDec(EM_tokPos, $2, $4, $6);}
                         ;
 
-id:			  ID								{$$=S_Symbol($1);}
+id:			  ID								{$$=std::string($1);}
                         ;
 
 fundecs:	  fundec			%prec LOW		{$$=A_FunctionDec(EM_tokPos, A_FundecList($1, NULL));}
