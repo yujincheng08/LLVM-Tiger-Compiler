@@ -7,6 +7,8 @@ extern "C"{
 #include "absyn.h"
 }
 
+#include <AST/ast.h>
+
 int yylex(void); /* function prototype */
 
 A_exp absyn_root;
