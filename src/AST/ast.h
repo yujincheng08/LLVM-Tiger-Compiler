@@ -131,7 +131,7 @@ class Field {
       : name_(move(name)), exp_(move(exp)) {}
 };
 
-class RecordExp : Exp {
+class RecordExp : public Exp {
   string name_;
   vector<unique_ptr<Field>> fields_;
 
@@ -141,7 +141,7 @@ class RecordExp : Exp {
   Value *codegen() override;
 };
 
-class SequenceExp : Exp {
+class SequenceExp : public Exp {
   vector<unique_ptr<Exp>> exps_;
 
  public:
@@ -149,7 +149,7 @@ class SequenceExp : Exp {
   Value *codegen() override;
 };
 
-class AssignExp : Exp {
+class AssignExp : public Exp {
   unique_ptr<Var> var_;
   unique_ptr<Exp> exp_;
 
@@ -159,7 +159,7 @@ class AssignExp : Exp {
   Value *codegen() override;
 };
 
-class IfExp : Exp {
+class IfExp : public Exp {
   unique_ptr<Exp> test_;
   unique_ptr<Exp> then_;
   unique_ptr<Exp> else_;
@@ -170,7 +170,7 @@ class IfExp : Exp {
   Value *codegen() override;
 };
 
-class WhileExp : Exp {
+class WhileExp : public Exp {
   unique_ptr<Exp> test_;
   unique_ptr<Exp> body_;
 
@@ -180,7 +180,7 @@ class WhileExp : Exp {
   Value *codegen() override;
 };
 
-class ForExp : Exp {
+class ForExp : public Exp {
   unique_ptr<Var> var_;
   unique_ptr<Exp> low_;
   unique_ptr<Exp> high_;
@@ -197,14 +197,14 @@ class ForExp : Exp {
   Value *codegen() override;
 };
 
-class BreakExp : Exp {
+class BreakExp : public Exp {
   // dummpy body
  public:
   BreakExp() = default;
   Value *codegen() override;
 };
 
-class LetExp : Exp {
+class LetExp : public Exp {
   vector<unique_ptr<Dec>> decs_;
   unique_ptr<Exp> body_;
 
@@ -214,7 +214,7 @@ class LetExp : Exp {
   Value *codegen() override;
 };
 
-class ArrayExp : Exp {
+class ArrayExp : public Exp {
   string type_;
   unique_ptr<Exp> size_;
   unique_ptr<Exp> init_;
@@ -234,7 +234,7 @@ class Prototype {
       : params_(move(params)), result_(move(result)) {}
 };
 
-class FunctionDec : Dec {
+class FunctionDec : public Dec {
   string name_;
   unique_ptr<Prototype> proto_;
   unique_ptr<Exp> body_;
@@ -245,7 +245,7 @@ class FunctionDec : Dec {
   Value *codegen() override;
 };
 
-class VarDec : Dec {
+class VarDec : public Dec {
   string type_;
   unique_ptr<Exp> init_;
   // bool escape;
@@ -255,7 +255,7 @@ class VarDec : Dec {
   Value *codegen() override;
 };
 
-class TypeDec : Dec {
+class TypeDec : public Dec {
   vector<unique_ptr<Type>> types_;
 
  public:
@@ -264,7 +264,7 @@ class TypeDec : Dec {
   Value *codegen() override;
 };
 
-class NameType : Type {
+class NameType : public Type {
   unique_ptr<Type> type_;
 
  public:
@@ -273,7 +273,7 @@ class NameType : Type {
   Value *codegen() override;
 };
 
-class RecordType : Type {
+class RecordType : public Type {
   vector<unique_ptr<Field>> fields_;
 
  public:
@@ -281,7 +281,7 @@ class RecordType : Type {
       : Type(move(name)), fields_(move(fields)) {}
 };
 
-class ArrayType : Type {
+class ArrayType : public Type {
   unique_ptr<Type> type_;
 
  public:
