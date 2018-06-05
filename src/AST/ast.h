@@ -112,21 +112,24 @@ class CallExp : public Exp {
 // TODO: UnaryExp
 
 class BinaryExp : public Exp {
+public:
   enum Operator : char {
     ADD = '+',
     SUB = '-',
     MUL = '*',
     DIV = '/',
-    LT = '<',
-    GT = '>',
-    EQ = '=',
-    NEQ = '!',
+    LTH = '<',
+    GTH = '>',
+    EQU = '=',
+    NEQU = '!',
     LEQ = '[',
     GEQ = ']',
     AND = '&',
     OR = '|',
     XOR = '^',
-  } op_;  // TODO: use enum
+  };
+private:
+  Operator op_;  // TODO: use enum
   unique_ptr<Exp> left_;
   unique_ptr<Exp> right_;
 
