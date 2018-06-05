@@ -18,12 +18,12 @@ void yyerror(char *s)
 %union {
   int pos;
   int ival;
-  std::string sval;
-  std::unique_ptr<Var> var;
-  std::unique_ptr<Exp> exp;
-  std::unique_ptr<Dec> dec;
-  std::vector<std::unique_ptr<Exp>> expList;
-  std::vector<std::unique_ptr<Dec>> decList;
+  std::string *sval;
+  Var *var;
+  Exp *exp;
+  Dec *dec;
+  std::vector<std::unique_ptr<Exp>> *expList;
+  std::vector<std::unique_ptr<Dec>> *decList;
 }
 
 %token <sval> ID STRING
@@ -61,15 +61,15 @@ void yyerror(char *s)
 
 %%
 
-prog:	    root						        {root=std::move($1);}
+prog:	    root						        {root=llvm::make_unique<Node>($1);}
                         ;
 
-root:	    /* empty */						    {$$=nullptr}
-                        | exp								{$$=$1}
+root:	    /* empty */						    {$$=nullptr;}
+                        | exp								{$$=std::move($1);}
 
-exp:		          INT								{$$=llvm::make_unique<IntExp>($1);}
-                        | STRING							{$$=llvm::make_unique<StringExp>($1);}
-                        | NIL								{$$=llvm::make_unique<NilExp>();}
+exp:		          INT								{$$=new IntExp($1);}
+                        | STRING							{$$=new StringExp(*$1);}
+                        | NIL								{$$=new NilExp();}
                         | lvalue							{$$=A_VarExp(EM_tokPos, $1);}
                         | lvalue ASSIGN exp					{$$=A_AssignExp(EM_tokPos, $1, $3);}
                         | LPAREN explist RPAREN				{$$=A_SeqExp(EM_tokPos, $2);}

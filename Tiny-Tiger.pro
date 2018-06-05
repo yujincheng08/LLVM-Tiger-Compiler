@@ -8,7 +8,7 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-LLVM = llvm-config-6.0
+LLVM = llvm-config
 
 TARGET = Tiny-Tiger
 TEMPLATE = app

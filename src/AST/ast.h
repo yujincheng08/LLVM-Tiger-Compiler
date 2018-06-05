@@ -19,7 +19,7 @@ class Node {
  public:
   virtual ~Node() = default;
   virtual Value *codegen() = 0;
-  setPos(const size_t &pos) { pos_ = pos; }
+  void setPos(const size_t &pos) { pos_ = pos; }
 };
 
 class Var : public Node {};
