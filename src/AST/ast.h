@@ -14,10 +14,12 @@ using std::string;
 using std::unique_ptr;
 using std::vector;
 class Node {
-  // size_t pos;
+  size_t pos_;
+
  public:
   virtual ~Node() = default;
   virtual Value *codegen() = 0;
+  setPos(const size_t &pos) { pos_ = pos; }
 };
 
 class Var : public Node {};
@@ -226,18 +228,20 @@ class ArrayExp : Exp {
 class Prototype {
   vector<unique_ptr<Field>> params_;
   string result_;
-public:
+
+ public:
   Prototype(vector<unique_ptr<Field>> params, string result)
-    :params_(move(params)), result_(move(result)){}
+      : params_(move(params)), result_(move(result)) {}
 };
 
 class FunctionDec : Dec {
   string name_;
   unique_ptr<Prototype> proto_;
   unique_ptr<Exp> body_;
-public:
+
+ public:
   FunctionDec(string name, unique_ptr<Prototype> proto, unique_ptr<Exp> body)
-    :Dec(move(name)), proto_(move(proto)), body_(move(body)){}
+      : Dec(move(name)), proto_(move(proto)), body_(move(body)) {}
   Value *codegen() override;
 };
 
@@ -245,9 +249,9 @@ class VarDec : Dec {
   string type_;
   unique_ptr<Exp> init_;
   // bool escape;
-public:
+ public:
   VarDec(string name, string type, unique_ptr<Exp> init)
-    :Dec(move(name)), type_(move(type)), init_(move(init)){}
+      : Dec(move(name)), type_(move(type)), init_(move(init)) {}
   Value *codegen() override;
 };
 
