@@ -112,12 +112,26 @@ class CallExp : public Exp {
 // TODO: UnaryExp
 
 class BinaryExp : public Exp {
-  char op_;  // TODO: use enum
+  enum Operator : char {
+    ADD = '+',
+    SUB = '-',
+    MUL = '*',
+    DIV = '/',
+    LT = '<',
+    GT = '>',
+    EQ = '=',
+    NEQ = '!',
+    LEQ = '[',
+    GEQ = ']',
+    AND = '&',
+    OR = '|',
+    XOR = '^',
+  } op_;  // TODO: use enum
   unique_ptr<Exp> left_;
   unique_ptr<Exp> right_;
 
  public:
-  BinaryExp(char const &op, unique_ptr<Exp> left, unique_ptr<Exp> right)
+  BinaryExp(Operator const &op, unique_ptr<Exp> left, unique_ptr<Exp> right)
       : op_(op), left_(move(left)), right_(move(right)) {}
   Value *codegen() override;
 };
