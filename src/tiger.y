@@ -70,7 +70,7 @@ root:	    /* empty */						    {$$=nullptr;}
 exp:		          INT								{$$=new IntExp($1);}
                         | STRING							{$$=new StringExp(*$1);}
                         | NIL								{$$=new NilExp();}
-                        | lvalue							{$$=A_VarExp(EM_tokPos, $1);}
+                        | lvalue							{$$=new VarExp(llvm::make_unique<Var>($1));}
                         | lvalue ASSIGN exp					{$$=A_AssignExp(EM_tokPos, $1, $3);}
                         | LPAREN explist RPAREN				{$$=A_SeqExp(EM_tokPos, $2);}
                         | cond						    	{$$=$1}
@@ -136,8 +136,8 @@ lvalue:		  id			%prec LOW			{$$=A_SimpleVar(EM_tokPos, $1);}
                         ;
 
 explist:		/* empty */							{$$=NULL;}
-                        | exp								{$$=A_ExpList($1, NULL);}
-                        | exp SEMICOLON explist				{$$=A_ExpList($1, $3);}
+                        | exp								{$$=new std::vector<std::unique_ptr<Exp>>(); $$->push_back(llvm::make_unique<Exp>($1));}
+                        | exp SEMICOLON explist				{$$=$3; $3->push_back(llvm::make_unique<Exp>($1));}
                         ;
 
 cond:	  IF exp THEN exp ELSE exp			{$$=A_IfExp(EM_tokPos, $2, $4, $6);}
