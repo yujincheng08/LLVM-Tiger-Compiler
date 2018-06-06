@@ -51,7 +51,8 @@ SOURCES += \
     src/tree.c \
     src/canon.c \
     src/assem.c \
-    src/AST/ast.cpp
+    src/AST/ast.cpp \
+    src/codegen/codegen.cpp
 
 HEADERS += \
     src/mainwindow.h \

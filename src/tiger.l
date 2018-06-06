@@ -1,21 +1,19 @@
 %{
-#include <string.h>
+#include <string>
+#include <sstream>
+#include <AST/ast.h>
+#include <iostream>
+using namespace AST;
+#include <cstring>
 #include <unistd.h>
-extern "C" {
-#include "errormsg.h"
-#include "symbol.h"
-#include "absyn.h"
-#include "util.h"
-}
 #include "tiger_yacc.h"
 
 #define BUFSIZE 65535
-#define ADJ {EM_tokPos=charPos; charPos+=yyleng;}
+#define ADJ {charPos+=yyleng;}
 
 int charPos = 1;
-char strbuf[BUFSIZE+1];
+std::stringstream strbuf;
 char *strptr = NULL;
-unsigned int strlength = 0;
 int commentDepth = 0;
 
 extern "C" int yywrap(void)
@@ -24,30 +22,11 @@ extern "C" int yywrap(void)
  return 1;
 }
 
-void setup(void)
-{
-	*strbuf = '\0';
-	strlength = 0;
-}
-
-void append(string str)
-{
-    if (strlength + strlen(str) < BUFSIZE)
-    {
-        strcat(strbuf, str);
-        strlength += strlen(str);
-    }
-    else
-    {
-        EM_error(EM_tokPos, "Out of range");
-    }
-}
-
 %}
 %x COMMENT STR
 %%
 [ \t]	{ADJ; continue;}
-(\n|\r\n)  {ADJ; EM_newline(); continue;}
+(\n|\r\n)  {ADJ; /*EM_newline();*/ continue;}
 "*"   {ADJ; return TIMES;}
 "/"   {ADJ; return DIVIDE;}
 "/*"  {ADJ; BEGIN(COMMENT); commentDepth++;}
@@ -55,7 +34,7 @@ void append(string str)
 	"/*" {ADJ; commentDepth++;}
 	"*/" {ADJ; if (--commentDepth == 0) BEGIN(INITIAL);}
 	[^\n] {ADJ;}
-	(\n|\r\n)	{ADJ; EM_newline();}
+        (\n|\r\n)	{ADJ; /*EM_newline();*/}
 }
 "array"    {ADJ; return ARRAY;}
 "break"    {ADJ; return BREAK;}
@@ -74,7 +53,7 @@ void append(string str)
 "type"     {ADJ; return TYPE;}
 "while"    {ADJ; return WHILE;}
 "var"      {ADJ; return VAR;}
-[a-zA-Z][a-zA-Z0-9_]*    {ADJ; tigerlval.sval=yytext; return ID;}
+[a-zA-Z][a-zA-Z0-9_]*    {ADJ; tigerlval.sval=new string(yytext); return ID;}
 [0-9]+	   {ADJ; tigerlval.ival=atoi(yytext); return INT;}
 "+"        {ADJ; return PLUS;}
 "-"        {ADJ; return MINUS;}
@@ -98,19 +77,19 @@ void append(string str)
 ">="       {ADJ; return GE;}
 ":="       {ADJ; return ASSIGN;}
 
-\" {ADJ; BEGIN(STR); setup();}
+\" {ADJ; BEGIN(STR); }
 <STR>{
-        \" 			     {ADJ; tigerlval.sval=String(strbuf); BEGIN(INITIAL); return STRING;}
-	\\n			     {ADJ; append("\n");}
-	\\t			     {ADJ; append("\t");}
-    \\^[GHIJLM]	     {ADJ; append(yytext);}
-	\\[0-9]{3}	     {ADJ; append(yytext);}
-	\\\"    		 {ADJ; append(yytext);}
+        \" 			     {ADJ; tigerlval.sval=new std::string(strbuf.str()); BEGIN(INITIAL); return STRING;}
+        \\n			     {ADJ; strbuf << "\n";}
+        \\t			     {ADJ; strbuf << "\t";}
+    \\^[GHIJLM]	     {ADJ; strbuf<<yytext;}
+        \\[0-9]{3}	     {ADJ; strbuf<<yytext;}
+        \\\"    		 {ADJ; strbuf<<yytext;}
 	\\[ \n\t\r\f]+\\ {ADJ;}
-	\\(.|\n)	     {ADJ; EM_error(EM_tokPos, "illegal token");}
-	(\n|\r\n)	     {ADJ; EM_error(EM_tokPos, "illegal token");}
-	[^\"\\\n(\r\n)]+ {ADJ; append(yytext);}
+        \\(.|\n)	     {ADJ; std::cerr << "illegal token" << std::endl;}
+        (\n|\r\n)	     {ADJ; std::cerr << "illegal token" << std::endl;}
+        [^\"\\\n(\r\n)]+ {ADJ; strbuf<<yytext;}
 }
-.	 {ADJ; EM_error(EM_tokPos,"illegal token");}
+.	 {ADJ; std::cerr << "illegal token" << std::endl;}
 %%
 

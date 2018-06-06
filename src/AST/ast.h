@@ -33,12 +33,7 @@ class Dec : public Node {
   Dec(string name) : name_(move(name)) {}
 };
 
-class Type : public Node {
-  string name_;
-
- public:
-  Type(string name) : name_(move(name)) {}
-};
+class Type : public Node {};
 
 class SimpleVar : public Var {
   string name_;
@@ -112,7 +107,7 @@ class CallExp : public Exp {
 // TODO: UnaryExp
 
 class BinaryExp : public Exp {
-public:
+ public:
   enum Operator : char {
     ADD = '+',
     SUB = '-',
@@ -128,7 +123,8 @@ public:
     OR = '|',
     XOR = '^',
   };
-private:
+
+ private:
   Operator op_;  // TODO: use enum
   unique_ptr<Exp> left_;
   unique_ptr<Exp> right_;
@@ -141,20 +137,29 @@ private:
 
 class Field {
   string name_;
-  unique_ptr<Exp> exp_;
+  unique_ptr<Type> type_;
 
  public:
-  Field(string name, unique_ptr<Exp> exp)
-      : name_(move(name)), exp_(move(exp)) {}
+  Field(string name, unique_ptr<Type> type)
+      : name_(move(name)), type_(move(type)) {}
+};
+
+class FieldExp {
+  string name_;
+  unique_ptr<Exp> exp_;
+
+public:
+  FieldExp(string name, unique_ptr<Exp> exp)
+    :name_(move(name)), exp_(move(exp)){}
 };
 
 class RecordExp : public Exp {
   string name_;
-  vector<unique_ptr<Field>> fields_;
+  vector<unique_ptr<FieldExp>> fieldExps_;
 
  public:
-  RecordExp(string name, vector<unique_ptr<Field>> fields)
-      : name_(move(name)), fields_(move(fields)) {}
+  RecordExp(string name, vector<unique_ptr<FieldExp>> fieldExps)
+      : name_(move(name)), fieldExps_(move(fieldExps)) {}
   Value *codegen() override;
 };
 
@@ -273,20 +278,18 @@ class VarDec : public Dec {
 };
 
 class TypeDec : public Dec {
-  vector<unique_ptr<Type>> types_;
+  unique_ptr<Type> type_;
 
  public:
-  TypeDec(string name, vector<unique_ptr<Type>> types)
-      : Dec(move(name)), types_(move(types)) {}
+  TypeDec(string name, unique_ptr<Type> type)
+      : Dec(move(name)), type_(move(type)) {}
   Value *codegen() override;
 };
 
 class NameType : public Type {
-  unique_ptr<Type> type_;
-
+  string name_;
  public:
-  NameType(string name, unique_ptr<Type> type)
-      : Type(move(name)), type_(move(type)) {}
+  NameType(string name) : name_(move(name)) {}
   Value *codegen() override;
 };
 
@@ -294,16 +297,16 @@ class RecordType : public Type {
   vector<unique_ptr<Field>> fields_;
 
  public:
-  RecordType(string name, vector<unique_ptr<Field>> fields)
-      : Type(move(name)), fields_(move(fields)) {}
+  RecordType(vector<unique_ptr<Field>> fields)
+      : fields_(move(fields)) {}
+  Value *codegen() override;
 };
 
 class ArrayType : public Type {
-  unique_ptr<Type> type_;
-
+  string name_;
  public:
-  ArrayType(string name, unique_ptr<Type> type)
-      : Type(move(name)), type_(move(type)) {}
+  ArrayType(string name) : name_(move(name)) {}
+  Value *codegen() override;
 };
 
 }  // namespace AST
