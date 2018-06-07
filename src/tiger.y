@@ -121,7 +121,7 @@ nonarglist:       exp								{$$=new std::vector<std::unique_ptr<Exp>>();$$->pus
                 | exp COMMA nonarglist				{$$=$3; $3->push_back(std::unique_ptr<Exp>($1));}
                 ;
 
-decs:           /* empty */							{$$=nullptr;}
+decs:           /* empty */							{$$=new std::vector<std::unique_ptr<Dec>>();}
                 | dec decs							{$$=$2; $2->push_back(std::unique_ptr<Dec>($1));}
                 ;
 
@@ -140,7 +140,7 @@ lvalue:           id %prec LOW                      {$$=new SimpleVar(*$1); dele
                 | lvalue DOT id						{$$=new FieldVar(std::unique_ptr<Var>($1), *$3); delete $3;}
                 ;
 
-explist:		/* empty */							{$$=NULL;}
+explist:		/* empty */							{$$=new std::vector<std::unique_ptr<Exp>>();}
                 | exp								{$$=new std::vector<std::unique_ptr<Exp>>(); $$->push_back(std::unique_ptr<Exp>($1));}
                 | exp SEMICOLON explist				{$$=$3; $3->push_back(std::unique_ptr<Exp>($1));}
                 ;
@@ -167,7 +167,7 @@ tyfields:       /* empty */							{$$=nullptr;}
 tyfield:          id COLON id						{$$=new Field(*$1, llvm::make_unique<NameType>(*$3)); delete $1; delete $3;}
                 ;
 
-vardec:           VAR id ASSIGN exp					{$$=new VarDec(*$2, nullptr, std::unique_ptr<Exp>($4)); delete $2;}
+vardec:           VAR id ASSIGN exp					{$$=new VarDec(*$2, "", std::unique_ptr<Exp>($4)); delete $2;}
                 | VAR id COLON id ASSIGN exp		{$$=new VarDec(*$2, *$4, std::unique_ptr<Exp>($6)); delete $2; delete $4;}
                 ;
 
