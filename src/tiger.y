@@ -148,7 +148,7 @@ explist:		/* empty */							{$$=NULL;}
 cond:             IF exp THEN exp ELSE exp			{$$=new IfExp(std::unique_ptr<Exp>($2), std::unique_ptr<Exp>($4), std::unique_ptr<Exp>($6));}
                 | IF exp THEN exp					{$$=new IfExp(std::unique_ptr<Exp>($2), std::unique_ptr<Exp>($4), nullptr);}
                 | WHILE exp DO exp					{$$=new WhileExp(std::unique_ptr<Exp>($2), std::unique_ptr<Exp>($4));}
-                | FOR id ASSIGN exp TO exp DO exp	{$$=new ForExp(llvm::make_unique<SimpleVar>(*$2), std::unique_ptr<Exp>($4), std::unique_ptr<Exp>($6), std::unique_ptr<Exp>($8)); delete $2;}
+                | FOR id ASSIGN exp TO exp DO exp	{$$=new ForExp(*$2, std::unique_ptr<Exp>($4), std::unique_ptr<Exp>($6), std::unique_ptr<Exp>($8)); delete $2;}
                 ;
 
 tydec:            TYPE id EQ ty						{$$=new TypeDec(*$2, std::unique_ptr<Type>($4)); delete $2;}
@@ -178,8 +178,8 @@ id:               ID								{$$=$1;}
                 //| fundec fundecs					{$$=A_FunctionDec(EM_tokPos, A_FundecList($1, $2->u.function));}
                 //;
 
-fundec:           FUNCTION id LPAREN tyfields RPAREN EQ exp				{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(std::move(*$4), "nil"), std::unique_ptr<Exp>($7)); delete $2;}
-                | FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp	{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(std::move(*$4), *$7), std::unique_ptr<Exp>($9)); delete $2;}
+fundec:           FUNCTION id LPAREN tyfields RPAREN EQ exp				{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), "nil"), std::unique_ptr<Exp>($7)); delete $2;}
+                | FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp	{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), *$7), std::unique_ptr<Exp>($9)); delete $2;}
                 ;
 
 

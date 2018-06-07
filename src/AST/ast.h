@@ -33,7 +33,11 @@ class Dec : public Node {
   Dec(string name) : name_(move(name)) {}
 };
 
-class Type : public Node {};
+class Type {
+public:
+  virtual ~Type() = default;
+  virtual llvm::Type *codegen() = 0;
+};
 
 class SimpleVar : public Var {
   string name_;
@@ -203,14 +207,14 @@ class WhileExp : public Exp {
 };
 
 class ForExp : public Exp {
-  unique_ptr<Var> var_;
+  string var_;
   unique_ptr<Exp> low_;
   unique_ptr<Exp> high_;
   unique_ptr<Exp> body_;
   // bool escape;
 
  public:
-  ForExp(unique_ptr<Var> var, unique_ptr<Exp> low, unique_ptr<Exp> high,
+  ForExp(string var, unique_ptr<Exp> low, unique_ptr<Exp> high,
          unique_ptr<Exp> body)
       : var_(move(var)),
         low_(move(low)),
@@ -248,12 +252,14 @@ class ArrayExp : public Exp {
 };
 
 class Prototype {
+  string name_;
   vector<unique_ptr<Field>> params_;
   string result_;
 
  public:
-  Prototype(vector<unique_ptr<Field>> params, string result)
-      : params_(move(params)), result_(move(result)) {}
+  Prototype(string name, vector<unique_ptr<Field>> params, string result)
+      : name_(move(name)), params_(move(params)), result_(move(result)) {}
+  llvm::Function *codegen();
 };
 
 class FunctionDec : public Dec {
@@ -290,7 +296,7 @@ class NameType : public Type {
   string name_;
  public:
   NameType(string name) : name_(move(name)) {}
-  Value *codegen() override;
+  llvm::Type *codegen() override;
 };
 
 class RecordType : public Type {
@@ -299,14 +305,14 @@ class RecordType : public Type {
  public:
   RecordType(vector<unique_ptr<Field>> fields)
       : fields_(move(fields)) {}
-  Value *codegen() override;
+  llvm::Type *codegen() override;
 };
 
 class ArrayType : public Type {
   string name_;
  public:
   ArrayType(string name) : name_(move(name)) {}
-  Value *codegen() override;
+  llvm::Type *codegen() override;
 };
 
 }  // namespace AST
