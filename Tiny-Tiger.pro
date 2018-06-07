@@ -8,9 +8,16 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
+LLVM = llvm-config
+
 TARGET = Tiny-Tiger
 TEMPLATE = app
 
+INCLUDEPATH += $$system($$LLVM --includedir)
+
+QMAKE_CXXFLAGS += $(shell $$LLVM --cxxflags)
+
+LIBS += $(shell $$LLVM --ldflags --system-libs --libs all)
 
 LEXSOURCES = src/tiger.l
 YACCSOURCES = src/tiger.y
@@ -38,12 +45,14 @@ SOURCES += \
     src/errormsg.c \
     src/absyn.c \
     src/types.c \
-    src/semant.c \
+    # src/semant.c \
     src/env.c \
     src/temp.c \
     src/tree.c \
     src/canon.c \
-    src/assem.c
+    src/assem.c \
+    src/AST/ast.cpp \
+    src/codegen/codegen.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -53,14 +62,15 @@ HEADERS += \
     src/errormsg.h \
     src/absyn.h \
     src/types.h \
-    src/semant.h \
+    # src/semant.h \
     src/env.h \
     src/temp.h \
     src/tree.h \
     src/canon.h \
     src/assem.h \
     src/translate.h \
-    src/frame.h
+    src/frame.h \
+    src/AST/ast.h
 
 OTHER_FILES += \
     src/tiger.l \
