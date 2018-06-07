@@ -48,7 +48,7 @@ llvm::Value *AST::FieldVar::codegen() {
     return logError(var->getName().str() + " is not a struct type");
   auto *structType = llvm::cast<llvm::StructType>(type);
   structType->elements();
-  //TODO
+  // TODO
 }
 
 llvm::Value *AST::SubscriptVar::codegen() {}
@@ -190,10 +190,8 @@ llvm::Value *AST::ArrayExp::codegen() {}
 llvm::Value *AST::FunctionDec::codegen() {}
 llvm::Type *AST::NameType::codegen() {}
 llvm::Type *AST::ArrayType::codegen() {}
-llvm::Type *AST::RecordType::codegen() {
-}
-llvm::Value *AST::StringExp::codegen() {
-}
+llvm::Type *AST::RecordType::codegen() {}
+llvm::Value *AST::StringExp::codegen() {}
 llvm::Value *AST::VarDec::codegen() {}
 
 llvm::Value *AST::TypeDec::codegen() {}
@@ -229,9 +227,9 @@ llvm::Value *AST::BinaryExp::codegen() {
       return builder.CreateICmpSLE(L, R, "cmptmp");
     case GEQ:
       return builder.CreateICmpSGE(L, R, "cmptmp");
-    case AND:
+    case AND_:
       return builder.CreateAnd(L, R, "andtmp");
-    case OR:
+    case OR_:
       return builder.CreateOr(L, R, "ortmp");
     case XOR:
       return builder.CreateXor(L, R, "xortmp");

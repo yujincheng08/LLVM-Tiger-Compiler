@@ -12,8 +12,8 @@ int main(int argc, char *argv[]) {
   // MainWindow w;
   // w.show();
   tigerparse();
-  auto value = root->codegen();
-  std::cout << value->getName().str();
+  root->print(0);
+  root->codegen();
   // return a.exec();
   return 0;
 }
