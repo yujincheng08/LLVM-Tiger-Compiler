@@ -104,7 +104,7 @@ exp:              INT                       		{$$=new IntExp($1);}
                 | BREAK								{$$=new BreakExp();}
                 ;
 
-reclist:        /* empty */                         {$$=nullptr;}
+reclist:        /* empty */                         {$$=new std::vector<std::unique_ptr<FieldExp>>();}
                 | id EQ exp							{$$=new std::vector<std::unique_ptr<FieldExp>>();
                                                                                  $$->push_back(llvm::make_unique<FieldExp>(*$1, std::unique_ptr<Exp>($3)));
                                                                                  delete $1;}
@@ -113,7 +113,7 @@ reclist:        /* empty */                         {$$=nullptr;}
 let:              LET decs IN explist END			{$$=new LetExp(std::move(*$2), llvm::make_unique<SequenceExp>(std::move(*$4)));}
                 ;
 
-arglist:        /* empty */							{$$=nullptr;}
+arglist:        /* empty */							{$$=new std::vector<std::unique_ptr<Exp>>();}
                 | nonarglist						{$$=$1;}
                 ;
 
@@ -159,7 +159,7 @@ ty:               id								{$$=new NameType(*$1); delete $1;}
                 | ARRAY OF id						{$$=new ArrayType(*$3); delete $3;}
                 ;
 
-tyfields:       /* empty */							{$$=nullptr;}
+tyfields:       /* empty */							{$$=new std::vector<std::unique_Ptr<Field>>();}
                 | tyfield							{$$=new std::vector<std::unique_ptr<Field>>(); $$->push_back(std::unique_ptr<Field>($1));}
                 | tyfield COMMA tyfields			{$$=$3; $3->push_back(std::unique_ptr<Field>($1));}
                 ;

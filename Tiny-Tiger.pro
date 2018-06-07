@@ -39,20 +39,21 @@ INCLUDEPATH += \
 SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \
-    src/util.c \
-    src/table.c \
-    src/symbol.c \
-    src/errormsg.c \
-    src/absyn.c \
-    src/types.c \
-    # src/semant.c \
-    src/env.c \
-    src/temp.c \
-    src/tree.c \
-    src/canon.c \
-    src/assem.c \
+#    src/util.c \
+#    src/table.c \
+#    src/symbol.c \
+#    src/errormsg.c \
+#    src/absyn.c \
+#    src/types.c \
+#    # src/semant.c \
+#    src/env.c \
+#    src/temp.c \
+#    src/tree.c \
+#    src/canon.c \
+#    src/assem.c \
     src/AST/ast.cpp \
-    src/codegen/codegen.cpp
+    src/codegen/codegen.cpp \
+    src/utils/symboltable.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -70,7 +71,8 @@ HEADERS += \
     src/assem.h \
     src/translate.h \
     src/frame.h \
-    src/AST/ast.h
+    src/AST/ast.h \
+    src/utils/symboltable.h
 
 OTHER_FILES += \
     src/tiger.l \
