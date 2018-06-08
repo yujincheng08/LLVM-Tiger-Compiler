@@ -186,6 +186,7 @@ class Field {
   friend class Prototype;
   friend class RecordType;
   friend class RecordExp;
+  friend class FieldVar;
 
   string name_;
   string type_;
@@ -391,6 +392,7 @@ class NameType : public Type {
 
 class RecordType : public Type {
   friend class RecordExp;
+  friend class FieldVar;
   vector<unique_ptr<Field>> fields_;
 
  public:

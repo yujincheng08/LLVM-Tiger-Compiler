@@ -19,19 +19,13 @@
 static llvm::LLVMContext context;
 static llvm::IRBuilder<> builder(context);
 static std::unique_ptr<llvm::Module> module;
-// static std::unordered_map<std::string, llvm::AllocaInst *> values;
 static SymbolTable<llvm::AllocaInst> values;
 static SymbolTable<llvm::Function> functions;
-// static std::stack<llvm::Function *> functionStack;
-// static std::unordered_map<std::string, std::unique_ptr<AST::Type>> types;
 static SymbolTable<AST::Type> typeDecs;
 static SymbolTable<llvm::Type> types;
 static std::stack<
     std::tuple<llvm::BasicBlock * /*next*/, llvm::BasicBlock * /*after*/>>
     loopStack;
-// static std::map<std::string, std::unique_ptr<AST::Prototype>> FunctionProtos;
-
-// TODO: FUNCTION STATIC LINK USING FUNCTION::SIZE()??
 
 static llvm::Value *logErrorV(std::string const &msg) {
   std::cerr << msg << std::endl;
@@ -241,21 +235,8 @@ llvm::Value *AST::AssignExp::codegen() {
   auto var = var_->codegen();
   if (!var) return nullptr;
   auto exp = exp_->codegen();
-  if (!exp) return nullptr;
-  //  if (isNil(exp)) {
-  //    auto type = var->getType();
-  //    if (!type->isPointerTy() &&
-  //        !llvm::cast<llvm::PointerType>(type)->getElementType()->isStructTy())
-  //        {
-  //      return logErrorV("Nil can only assign to struct type");
-  //    } else {
-  //      exp = llvm::ConstantPointerNull::get(
-  //          llvm::PointerType::getUnqual(var->getType()));
-  //    }
-  //  }
-  checkStore(exp, var);
-  // builder.CreateStore(exp, var);
-  return var;
+  if (!exp) return nullptr;  checkStore(exp, var);
+  return exp;  // var is a pointer, should not return
 }
 
 llvm::Value *AST::IfExp::codegen() {
@@ -280,7 +261,6 @@ llvm::Value *AST::IfExp::codegen() {
 
   thenBB = builder.GetInsertBlock();
 
-  // TODO: how about branch without a function
   function->getBasicBlockList().push_back(elseBB);
   builder.SetInsertPoint(elseBB);
 
@@ -293,7 +273,6 @@ llvm::Value *AST::IfExp::codegen() {
   builder.CreateBr(mergeBB);
   elseBB = builder.GetInsertBlock();
 
-  // TODO
   function->getBasicBlockList().push_back(mergeBB);
   builder.SetInsertPoint(mergeBB);
   if (thenBB->getType() != elseBB->getType())
@@ -308,7 +287,6 @@ llvm::Value *AST::IfExp::codegen() {
 
 llvm::Value *AST::WhileExp::codegen() {
   auto function = builder.GetInsertBlock()->getParent();
-  // TODO: it should read only in the body
   auto testBB = llvm::BasicBlock::Create(context, "test", function);
   auto loopBB = llvm::BasicBlock::Create(context, "loop", function);
   auto nextBB = llvm::BasicBlock::Create(context, "next", function);
@@ -443,8 +421,11 @@ llvm::Value *AST::SubscriptVar::codegen() {
   auto var = var_->codegen();
   if (!var) return nullptr;
   auto type = var->getType();
-  if (!type->isPointerTy())
+  if (!type->isPointerTy() || !getElementType(type)->isPointerTy() ||
+      getElementType(getElementType(type))->isStructTy())
     return logErrorV("Subscript is only for array type.");
+  var = builder.CreateLoad(var, "arrayPtr");
+  type = var->getType();
   auto eleType = getElementType(type);
   auto exp = exp_->codegen();
   if (!exp) return nullptr;
@@ -455,13 +436,27 @@ llvm::Value *AST::SubscriptVar::codegen() {
 
 llvm::Value *AST::FieldVar::codegen() {
   auto var = var_->codegen();
-  if (!var) return nullptr;  // TODO: Should I log something?
+  if (!var) return nullptr;
   auto type = var->getType();
-  if (!llvm::isa<llvm::StructType>(type))
-    return logErrorV(var->getName().str() + " is not a struct type");
-  auto *structType = llvm::cast<llvm::StructType>(type);
-  structType->elements();
-  // TODO
+  if (!type->isPointerTy() || !getElementType(type)->isPointerTy() ||
+      !getElementType(getElementType(type))->isStructTy())
+    return logErrorV("field reference is only for struct type.");
+  var = builder.CreateLoad(var, "structPtr");
+  type = var->getType();
+  llvm::StructType *eleType =
+      llvm::cast<llvm::StructType>(getElementType(type));
+
+  auto typeDec = dynamic_cast<RecordType *>(typeDecs[eleType->getStructName()]);
+  assert(typeDec);
+  size_t i = 0u;
+  for (auto &field : typeDec->fields_)
+    if (field->name_ == field_)
+      break;
+    else
+      ++i;
+  auto idx = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+                                    llvm::APInt(64, i));
+  return builder.CreateGEP(typeOf(typeDec->fields_[i]->type_), var, idx, "ptr");
 }
 
 llvm::Value *AST::RecordExp::codegen() {
@@ -499,7 +494,6 @@ llvm::Value *AST::RecordExp::codegen() {
 }
 
 llvm::Type *AST::ArrayType::codegen(std::set<std::string> &parentName) {
-  // TODO : recursive
   if (types[name_]) return types[name_];
   if (parentName.find(name_) != parentName.end())
     return logErrorT(name_ + " has an endless loop of type define");
@@ -527,7 +521,6 @@ llvm::Type *AST::NameType::codegen(std::set<std::string> &parentName) {
 }
 
 llvm::Type *AST::RecordType::codegen(std::set<std::string> &parentName) {
-  // TODO : recursive
   if (types[name_]) return types[name_];
   std::vector<llvm::Type *> types;
   if (parentName.find(name_) != parentName.end()) {
@@ -576,9 +569,13 @@ llvm::Function *AST::Prototype::codegen() {
     if (!argType) return nullptr;
     args.push_back(argType);
   }
-  // TODO logErrorF()
-  auto retType = typeOf(result_);
-  if (!retType) return nullptr;
+  llvm::Type *retType;
+  if (result_.empty()) {
+    retType = llvm::Type::getVoidTy(context);
+  } else {
+    retType = typeOf(result_);
+    if (!retType) return nullptr;
+  }
   auto oldFunc = functions[name_];
   if (oldFunc) rename(oldFunc->getName().str() + "-");
   auto functionType = llvm::FunctionType::get(retType, args, false);
@@ -613,7 +610,6 @@ llvm::Value *AST::FunctionDec::codegen() {
 
   if (auto retVal = body_->codegen()) {
     builder.CreateRet(retVal);
-    // TODO: check return value
     llvm::verifyFunction(*function);
     values.exit();
     builder.SetInsertPoint(oldBB);
@@ -664,7 +660,7 @@ llvm::Value *AST::BinaryExp::codegen() {
   auto L = left_->codegen();
   auto R = right_->codegen();
   if (!L || !R) return nullptr;
-
+  // TODO: check for nil
   switch (op_) {
     case ADD:
       return builder.CreateAdd(L, R, "addtmp");
