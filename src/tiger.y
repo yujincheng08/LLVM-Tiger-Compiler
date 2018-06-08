@@ -101,8 +101,8 @@ exp:              INT                       		{$$=new IntExp($1);}
                 | exp EQ exp						{$$=new BinaryExp(BinaryExp::EQU, std::unique_ptr<Exp>($1), std::unique_ptr<Exp>($3));}
                 | exp NEQ exp						{$$=new BinaryExp(BinaryExp::NEQU, std::unique_ptr<Exp>($1), std::unique_ptr<Exp>($3));}
                 | id LPAREN arglist RPAREN			{$$=new CallExp(*$1, std::move(*$3)); delete $1;}
-                | id LBRACK exp RBRACK OF exp		{$$=new ArrayExp(llvm::make_unique<NameType>(*$1), std::unique_ptr<Exp>($3), std::unique_ptr<Exp>($6)); delete $1;}
-                | id LBRACE reclist RBRACE			{$$=new RecordExp(llvm::make_unique<NameType>(*$1), std::move(*$3)); delete $1;}
+                | id LBRACK exp RBRACK OF exp		{$$=new ArrayExp(*$1, std::unique_ptr<Exp>($3), std::unique_ptr<Exp>($6)); delete $1;}
+                | id LBRACE reclist RBRACE			{$$=new RecordExp(*$1, std::move(*$3)); delete $1;}
                 | BREAK								{$$=new BreakExp();}
                 ;
 
@@ -158,7 +158,7 @@ tydec:            TYPE id EQ ty						{$$=new TypeDec(*$2, std::unique_ptr<Type>(
 
 ty:               id								{$$=new NameType(*$1); delete $1;}
                 | LBRACE tyfields RBRACE			{$$=new RecordType(std::move(*$2));}
-                | ARRAY OF id						{$$=new ArrayType(llvm::make_unique<NameType>(*$3)); delete $3;}
+                | ARRAY OF id						{$$=new ArrayType(*$3); delete $3;}
                 ;
 
 tyfields:       /* empty */							{$$=new std::vector<std::unique_ptr<Field>>();}
@@ -166,11 +166,11 @@ tyfields:       /* empty */							{$$=new std::vector<std::unique_ptr<Field>>();
                 | tyfield COMMA tyfields			{$$=$3; $3->push_back(std::unique_ptr<Field>($1));}
                 ;
 
-tyfield:          id COLON id						{$$=new Field(*$1, llvm::make_unique<NameType>(*$3)); delete $1; delete $3;}
+tyfield:          id COLON id						{$$=new Field(*$1, *$3); delete $1; delete $3;}
                 ;
 
-vardec:           VAR id ASSIGN exp					{$$=new VarDec(*$2, nullptr, std::unique_ptr<Exp>($4)); delete $2;}
-                | VAR id COLON id ASSIGN exp		{$$=new VarDec(*$2, llvm::make_unique<NameType>(*$4), std::unique_ptr<Exp>($6)); delete $2; delete $4;}
+vardec:           VAR id ASSIGN exp					{$$=new VarDec(*$2, "", std::unique_ptr<Exp>($4)); delete $2;}
+                | VAR id COLON id ASSIGN exp		{$$=new VarDec(*$2, *$4, std::unique_ptr<Exp>($6)); delete $2; delete $4;}
                 ;
 
 id:               ID								{$$=$1;}
@@ -180,8 +180,8 @@ id:               ID								{$$=$1;}
                 //| fundec fundecs					{$$=A_FunctionDec(EM_tokPos, A_FundecList($1, $2->u.function));}
                 //;
 
-fundec:           FUNCTION id LPAREN tyfields RPAREN EQ exp				{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), llvm::make_unique<NameType>("nil")), std::unique_ptr<Exp>($7)); delete $2;}
-                | FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp	{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), llvm::make_unique<NameType>(*$7)), std::unique_ptr<Exp>($9)); delete $2;}
+fundec:           FUNCTION id LPAREN tyfields RPAREN EQ exp				{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), "nil"), std::unique_ptr<Exp>($7)); delete $2;}
+                | FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp	{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), *$7), std::unique_ptr<Exp>($9)); delete $2;}
                 ;
 
 

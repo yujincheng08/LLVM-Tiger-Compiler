@@ -24,7 +24,8 @@ static SymbolTable<llvm::AllocaInst> values;
 static SymbolTable<llvm::Function> functions;
 // static std::stack<llvm::Function *> functionStack;
 // static std::unordered_map<std::string, std::unique_ptr<AST::Type>> types;
-static SymbolTable<AST::Type> types;
+static SymbolTable<AST::Type> typeDecs;
+static SymbolTable<llvm::Type> types;
 static std::stack<
     std::tuple<llvm::BasicBlock * /*next*/, llvm::BasicBlock * /*after*/>>
     loopStack;
@@ -51,11 +52,41 @@ static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function *function,
   return TmpB.CreateAlloca(type, size, name.c_str());
 }
 
-// static llvm::Type *typeOf(std::string const &name) {
-//  auto &type = types[name];
-//  if (!type) return logErrorT(name + " is not a type");
-//  return type->codegen(name);
-//}
+static llvm::Type *getElementType(llvm::Type *type) {
+  return llvm::cast<llvm::PointerType>(type)->getElementType();
+}
+
+static bool isNil(llvm::Value *exp) {
+  return exp->getType()->isPointerTy() &&
+         getElementType(exp->getType())->isVoidTy();
+}
+
+static llvm::Value *checkStore(llvm::Value *val, llvm::Value *ptr) {
+  if (isNil(val)) {
+    auto type = ptr->getType();
+    if ((type->isPointerTy() && getElementType(type)->isPointerTy() &&
+         getElementType(getElementType(type))->isStructTy())) {
+      val = llvm::ConstantPointerNull::get(
+          llvm::cast<llvm::PointerType>(getElementType(type)));
+    } else {
+      return logErrorV("Nil can only assign to struct type");
+    }
+  }
+  return builder.CreateStore(val, ptr);
+}
+
+static llvm::Type *typeOf(std::string const &name,
+                          std::set<std::string> &parentName) {
+  if (auto type = types[name]) return type;
+  auto typeDec = typeDecs[name];
+  if (!typeDec) logErrorT(name + " is not a type");
+  return typeDec->codegen(parentName);
+}
+
+static llvm::Type *typeOf(const std::string &name) {
+  std::set<std::string> parentName;
+  return typeOf(name, parentName);
+}
 
 llvm::Value *AST::Root::codegen() {
   module = llvm::make_unique<llvm::Module>("main", context);
@@ -66,6 +97,9 @@ llvm::Value *AST::Root::codegen() {
       mainProto, llvm::GlobalValue::ExternalLinkage, "main", module.get());
   auto block = llvm::BasicBlock::Create(context, "entry", mainFunction);
 
+  types["int"] = llvm::Type::getInt64Ty(context);
+  types["string"] =
+      llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(context));
   builder.SetInsertPoint(block);
   root_->codegen();
   // llvm::ReturnInst::Create(context, block);
@@ -80,7 +114,7 @@ llvm::Value *AST::Root::codegen() {
 llvm::Value *AST::SimpleVar::codegen() {
   auto var = values[name_];
   if (!var) return logErrorV("Unknown variable name " + name_);
-  return builder.CreateLoad(var, name_.c_str());
+  return var;
 }
 
 llvm::Value *AST::IntExp::codegen() {
@@ -104,8 +138,12 @@ llvm::Value *AST::BreakExp::codegen() {
 llvm::Value *AST::ForExp::codegen() {
   auto low = low_->codegen();
   if (!low) return nullptr;
+  if (!low->getType()->isIntegerTy())
+    return logErrorV("loop lower bound should be integer");
   auto high = high_->codegen();
   if (!high) return nullptr;
+  if (!high->getType()->isIntegerTy())
+    return logErrorV("loop higher bound should be integer");
   auto function = builder.GetInsertBlock()->getParent();
   // TODO: it should read only in the body
   auto variable =
@@ -147,7 +185,8 @@ llvm::Value *AST::ForExp::codegen() {
   builder.SetInsertPoint(nextBB);
 
   auto nextVar = builder.CreateAdd(
-      variable, llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
+      builder.CreateLoad(variable),
+      llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
   builder.CreateStore(nextVar, variable);
 
   builder.CreateBr(testBB);
@@ -175,25 +214,47 @@ llvm::Value *AST::SequenceExp::codegen() {
 
 llvm::Value *AST::LetExp::codegen() {
   values.enter();
+  types.enter();
+  typeDecs.enter();
   functions.enter();
   for (auto &dec : decs_) dec->codegen();
   auto result = body_->codegen();
   functions.exit();
+  types.exit();
+  typeDecs.exit();
   values.exit();
   return result;
 }
 
 llvm::Value *AST::NilExp::codegen() {
-  return llvm::Constant::getNullValue(llvm::Type::getInt64Ty(context));
+  return llvm::ConstantPointerNull::get(
+      llvm::PointerType::getUnqual(llvm::Type::getVoidTy(context)));
 }
 
-llvm::Value *AST::VarExp::codegen() { return var_->codegen(); }
+llvm::Value *AST::VarExp::codegen() {
+  auto var = var_->codegen();
+  if (!var) return nullptr;
+  return builder.CreateLoad(var, var->getName());
+}
+
 llvm::Value *AST::AssignExp::codegen() {
   auto var = var_->codegen();
   if (!var) return nullptr;
   auto exp = exp_->codegen();
   if (!exp) return nullptr;
-  builder.CreateStore(exp, var);
+  //  if (isNil(exp)) {
+  //    auto type = var->getType();
+  //    if (!type->isPointerTy() &&
+  //        !llvm::cast<llvm::PointerType>(type)->getElementType()->isStructTy())
+  //        {
+  //      return logErrorV("Nil can only assign to struct type");
+  //    } else {
+  //      exp = llvm::ConstantPointerNull::get(
+  //          llvm::PointerType::getUnqual(var->getType()));
+  //    }
+  //  }
+  checkStore(exp, var);
+  // builder.CreateStore(exp, var);
   return var;
 }
 
@@ -312,9 +373,9 @@ llvm::Value *AST::CallExp::codegen() {
 
 llvm::Value *AST::ArrayExp::codegen() {
   auto function = builder.GetInsertBlock()->getParent();
-  auto type = type_->codegen();
+  auto type = typeOf(type_);
   if (!type->isPointerTy()) return logErrorV("Array type required");
-  auto eleType = llvm::cast<llvm::PointerType>(type)->getElementType();
+  auto eleType = getElementType(type);
   auto size = size_->codegen();
   auto init = init_->codegen();
   auto arrayPtr = createEntryBlockAlloca(function, eleType, "arrayPtr", size);
@@ -351,7 +412,8 @@ llvm::Value *AST::ArrayExp::codegen() {
   values.push(indexName, index);
   // TODO: check its non-type value
   auto elePtr = builder.CreateGEP(eleType, arrayPtr, index, "elePtr");
-  builder.CreateStore(init, elePtr);
+  checkStore(init, elePtr);
+  // builder.CreateStore(init, elePtr);
   // goto next:
   builder.CreateBr(nextBB);
 
@@ -383,7 +445,7 @@ llvm::Value *AST::SubscriptVar::codegen() {
   auto type = var->getType();
   if (!type->isPointerTy())
     return logErrorV("Subscript is only for array type.");
-  auto eleType = llvm::cast<llvm::PointerType>(type)->getElementType();
+  auto eleType = getElementType(type);
   auto exp = exp_->codegen();
   if (!exp) return nullptr;
   if (exp->getType() != llvm::Type::getInt64Ty(context))
@@ -404,14 +466,23 @@ llvm::Value *AST::FieldVar::codegen() {
 
 llvm::Value *AST::RecordExp::codegen() {
   auto function = builder.GetInsertBlock()->getParent();
-  auto type = type_->codegen();
+  auto type = typeOf(type_);
+  if (!type) return nullptr;
+  if (!type->isPointerTy()) return logErrorV("Require a struct type");
+  type = getElementType(type);
   if (!type->isStructTy()) return logErrorV("Require a struct type");
-  llvm::StructType *structType = llvm::cast<llvm::StructType>(type);
+  auto typeDec = dynamic_cast<RecordType *>(typeDecs[type_]);
+  assert(typeDec);
   auto var = createEntryBlockAlloca(function, type, "record");
   size_t idx = 0u;
-  for (auto element : structType->elements()) {
+  if (typeDec->fields_.size() != fieldExps_.size())
+    return logErrorV("Wrong number of fields");
+  for (auto &fieldDec : typeDec->fields_) {
     auto &field = fieldExps_[idx];
-    // TODO: check field name
+    if (field->name_ != fieldDec->name_)
+      return logErrorV(field->name_ +
+                       " is not a field or not on the right position of " +
+                       type_);
     auto exp = field->exp_->codegen();
     if (!exp) return nullptr;
     auto elementPtr = builder.CreateGEP(
@@ -419,27 +490,72 @@ llvm::Value *AST::RecordExp::codegen() {
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
                                llvm::APInt(64, idx)),
         "elementPtr");
-    builder.CreateStore(exp, elementPtr);
+    // CHECK NIL
+    checkStore(exp, elementPtr);
+    // builder.CreateStore(exp, elementPtr);
     ++idx;
   }
   return var;
 }
 
-llvm::Type *AST::ArrayType::codegen(std::string const &) {
+llvm::Type *AST::ArrayType::codegen(std::set<std::string> &parentName) {
   // TODO : recursive
-  auto type = type_->codegen();
+  if (types[name_]) return types[name_];
+  if (parentName.find(name_) != parentName.end())
+    return logErrorT(name_ + " has an endless loop of type define");
+  parentName.insert(name_);
+  auto type = typeOf(type_, parentName);
+  parentName.erase(name_);
   if (!type) return nullptr;
-  return llvm::PointerType::getUnqual(type);
+  type = llvm::PointerType::getUnqual(type);
+  types[name_] = type;
+  return type;
 }
-llvm::Type *AST::RecordType::codegen(std::string const &) {
+
+llvm::Type *AST::NameType::codegen(std::set<std::string> &parentName) {
+  if (auto type = types[name_]) return type;
+  if (auto type = types[type_]) {
+    types[name_] = type;
+    return type;
+  }
+  if (parentName.find(name_) != parentName.end())
+    return logErrorT(name_ + " has an endless loop of type define");
+  parentName.insert(name_);
+  auto type = typeOf(type_, parentName);
+  parentName.erase(name_);
+  return type;
+}
+
+llvm::Type *AST::RecordType::codegen(std::set<std::string> &parentName) {
   // TODO : recursive
+  if (types[name_]) return types[name_];
   std::vector<llvm::Type *> types;
+  if (parentName.find(name_) != parentName.end()) {
+    auto type =
+        llvm::PointerType::getUnqual(llvm::StructType::create(context, name_));
+    ::types[name_] = type;
+    return type;
+  }
+  parentName.insert(name_);
   for (auto &field : fields_) {
-    auto type = field->type_->codegen();
+    auto type = typeOf(field->type_, parentName);
     if (!type) return nullptr;
     types.push_back(type);
   }
-  return llvm::StructType::create(context, types);
+  parentName.erase(name_);
+  if (auto type = ::types[name_]) {
+    if (!type->isPointerTy()) return nullptr;
+    auto eleType = getElementType(type);
+    if (!eleType->isStructTy()) return nullptr;
+    llvm::cast<llvm::StructType>(eleType)->setBody(types);
+    return type;
+  } else {
+    type = llvm::PointerType::getUnqual(
+        llvm::StructType::create(context, types, name_));
+    if (!type) return nullptr;
+    ::types[name_] = type;
+    return type;
+  }
 }
 
 llvm::Value *AST::StringExp::codegen() {
@@ -451,20 +567,18 @@ llvm::Value *AST::StringExp::codegen() {
                                                 llvm::APInt(8, 0)));
   return llvm::ConstantArray::get(
       llvm::ArrayType::get(llvm::Type::getInt8Ty(context), val_.size()), str);
-  // auto init = init_->codegen();
-  // auto arrayPtr = createEntryBlockAlloca(function, eleType, "arrayPtr",
-  // size); auto zero = llvm::ConstantInt::get(context, llvm::APInt(64, 0,
-  // true));
 }
 
 llvm::Function *AST::Prototype::codegen() {
   std::vector<llvm::Type *> args;
   for (auto &arg : params_) {
-    auto argType = arg->type_->codegen();
+    auto argType = typeOf(arg->type_);
     if (!argType) return nullptr;
     args.push_back(argType);
   }
-  auto retType = result_->codegen();
+  // TODO logErrorF()
+  auto retType = typeOf(result_);
+  if (!retType) return nullptr;
   auto oldFunc = functions[name_];
   if (oldFunc) rename(oldFunc->getName().str() + "-");
   auto functionType = llvm::FunctionType::get(retType, args, false);
@@ -492,7 +606,8 @@ llvm::Value *AST::FunctionDec::codegen() {
   for (auto &arg : function->args()) {
     auto argName = arg.getName();
     auto argAlloca = createEntryBlockAlloca(function, arg.getType(), argName);
-    builder.CreateStore(&arg, argAlloca);
+    checkStore(&arg, argAlloca);
+    // builder.CreateStore(&arg, argAlloca);
     values.push(argName, argAlloca);
   }
 
@@ -511,42 +626,37 @@ llvm::Value *AST::FunctionDec::codegen() {
   return logErrorV("Function " + name_ + " genteration failed");
 }
 
-llvm::Type *AST::NameType::codegen(std::string const &parentName) {
-  if (name_ == parentName)
-    return logErrorT(name_ + " has an endless loop of type define");
-  if (name_ == "int") return llvm::Type::getInt64Ty(context);
-  if (name_ == "string")
-    return llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(context));
-  if (types[name_])
-    if (parentName.empty())
-      return types[name_]->codegen(name_);
-    else
-      return types[name_]->codegen(parentName);
-  else
-    return logErrorT(name_ + " is not a type");
-}
-
 llvm::Value *AST::VarDec::codegen() {
-  llvm::Function *functioin = builder.GetInsertBlock()->getParent();
+  llvm::Function *function = builder.GetInsertBlock()->getParent();
   auto init = init_->codegen();
   if (!init) return nullptr;
   if (values.lookupOne(name_))
     return logErrorV(name_ + " is already defined in this function.");
   llvm::Type *type;
-  if (type_ == nullptr)
+  if (type_.empty())
     type = init->getType();
   else {
-    type = type_->codegen();
+    type = typeOf(type_);
     if (!type) return nullptr;
   }
-  auto *variable = createEntryBlockAlloca(functioin, type, name_);
-  builder.CreateStore(init, variable);
+  auto *variable = createEntryBlockAlloca(function, type, name_);
+  //  if (isNil(init)) {
+  //    if (!type->isStructTy()) {
+  //      return logErrorV("Nil can only assign to struct type");
+  //    } else {
+  //      init =
+  //      llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(type));
+  //    }
+  //  }
+  checkStore(init, variable);
+  // builder.CreateStore(init, variable);
   values.push(name_, variable);
   return variable;
 }
 
 llvm::Value *AST::TypeDec::codegen() {
-  types[name_] = type_.get();
+  type_->setName(name_);
+  typeDecs[name_] = type_.get();
   return llvm::Constant::getNullValue(llvm::Type::getInt64Ty(context));
 }
 

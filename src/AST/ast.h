@@ -4,6 +4,7 @@
 #include <llvm/IR/Value.h>
 #include <algorithm>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@ namespace AST {
 using llvm::Value;
 using std::move;
 using std::reverse;
+using std::set;
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -48,9 +50,15 @@ class Dec : public Node {
 };
 
 class Type {
+ protected:
+  string name_;
+
  public:
+  Type() = default;
+  void setName(string name) { name_ = move(name); }
+  const string &getName() const { return name_; }
   virtual ~Type() = default;
-  virtual llvm::Type *codegen(string const &parentName = "") = 0;
+  virtual llvm::Type *codegen(std::set<string> &parentName) = 0;
   virtual void print(int n) = 0;
 };
 
@@ -177,13 +185,13 @@ class BinaryExp : public Exp {
 class Field {
   friend class Prototype;
   friend class RecordType;
+  friend class RecordExp;
 
   string name_;
-  unique_ptr<Type> type_;
+  string type_;
 
  public:
-  Field(string name, unique_ptr<Type> type)
-      : name_(move(name)), type_(move(type)) {}
+  Field(string name, string type) : name_(move(name)), type_(move(type)) {}
 
   void print(int n);
 };
@@ -201,11 +209,11 @@ class FieldExp {
 };
 
 class RecordExp : public Exp {
-  unique_ptr<Type> type_;
+  string type_;
   vector<unique_ptr<FieldExp>> fieldExps_;
 
  public:
-  RecordExp(unique_ptr<Type> type, vector<unique_ptr<FieldExp>> fieldExps)
+  RecordExp(string type, vector<unique_ptr<FieldExp>> fieldExps)
       : type_(move(type)), fieldExps_(move(fieldExps)) {
     reverse(fieldExps_.begin(), fieldExps_.end());
   }
@@ -306,12 +314,12 @@ class LetExp : public Exp {
 };
 
 class ArrayExp : public Exp {
-  unique_ptr<Type> type_;
+  string type_;
   unique_ptr<Exp> size_;
   unique_ptr<Exp> init_;
 
  public:
-  ArrayExp(unique_ptr<Type> type, unique_ptr<Exp> size, unique_ptr<Exp> init)
+  ArrayExp(string type, unique_ptr<Exp> size, unique_ptr<Exp> init)
       : type_(move(type)), size_(move(size)), init_(move(init)) {}
   Value *codegen() override;
 
@@ -321,11 +329,10 @@ class ArrayExp : public Exp {
 class Prototype {
   string name_;
   vector<unique_ptr<Field>> params_;
-  unique_ptr<Type> result_;
+  string result_;
 
  public:
-  Prototype(string name, vector<unique_ptr<Field>> params,
-            unique_ptr<Type> result)
+  Prototype(string name, vector<unique_ptr<Field>> params, string result)
       : name_(move(name)), params_(move(params)), result_(move(result)) {
     reverse(params_.begin(), params_.end());
   }
@@ -351,11 +358,11 @@ class FunctionDec : public Dec {
 };
 
 class VarDec : public Dec {
-  unique_ptr<Type> type_;
+  string type_;
   unique_ptr<Exp> init_;
   // bool escape;
  public:
-  VarDec(string name, unique_ptr<Type> type, unique_ptr<Exp> init)
+  VarDec(string name, string type, unique_ptr<Exp> init)
       : Dec(move(name)), type_(move(type)), init_(move(init)) {}
   Value *codegen() override;
 
@@ -374,32 +381,33 @@ class TypeDec : public Dec {
 };
 
 class NameType : public Type {
-  string name_;
+  string type_;
 
  public:
-  llvm::Type *codegen(string const &parentName) override;
-  NameType(string name) : name_(move(name)) {}
+  llvm::Type *codegen(std::set<std::string> &parentName) override;
+  NameType(string type) : type_(move(type)) {}
   void print(int n) override;
 };
 
 class RecordType : public Type {
+  friend class RecordExp;
   vector<unique_ptr<Field>> fields_;
 
  public:
   RecordType(vector<unique_ptr<Field>> fields) : fields_(move(fields)) {
     reverse(fields_.begin(), fields_.end());
   }
-  llvm::Type *codegen(string const &parentName) override;
+  llvm::Type *codegen(std::set<std::string> &parentName) override;
   void print(int n) override;
 };
 
 class ArrayType : public Type {
-  unique_ptr<Type> type_;
+  string type_;
 
  protected:
  public:
-  ArrayType(unique_ptr<Type> name) : type_(move(name)) {}
-  llvm::Type *codegen(string const &parentName) override;
+  ArrayType(string type) : type_(move(type)) {}
+  llvm::Type *codegen(std::set<std::string> &parentName) override;
   void print(int n) override;
 };
 
