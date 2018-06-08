@@ -49,8 +49,11 @@ class Dec : public Node {
 
 class Type {
  public:
-  virtual ~Type() = default;
   virtual llvm::Type *codegen(string const &parentName) = 0;
+
+ public:
+  virtual ~Type() = default;
+  virtual llvm::Type *codegen() = 0;
   virtual void print(int n) = 0;
 };
 
@@ -178,10 +181,11 @@ class Field {
   friend class Prototype;
 
   string name_;
-  string type_;
+  unique_ptr<Type> type_;
 
  public:
-  Field(string name, string type) : name_(move(name)), type_(move(type)) {}
+  Field(string name, unique_ptr<Type> type)
+      : name_(move(name)), type_(move(type)) {}
 
   void print(int n);
 };
@@ -303,12 +307,12 @@ class LetExp : public Exp {
 };
 
 class ArrayExp : public Exp {
-  string type_;
+  unique_ptr<Type> type_;
   unique_ptr<Exp> size_;
   unique_ptr<Exp> init_;
 
  public:
-  ArrayExp(string type, unique_ptr<Exp> size, unique_ptr<Exp> init)
+  ArrayExp(unique_ptr<Type> type, unique_ptr<Exp> size, unique_ptr<Exp> init)
       : type_(move(type)), size_(move(size)), init_(move(init)) {}
   Value *codegen() override;
 
@@ -318,10 +322,11 @@ class ArrayExp : public Exp {
 class Prototype {
   string name_;
   vector<unique_ptr<Field>> params_;
-  string result_;
+  unique_ptr<Type> result_;
 
  public:
-  Prototype(string name, vector<unique_ptr<Field>> params, string result)
+  Prototype(string name, vector<unique_ptr<Field>> params,
+            unique_ptr<Type> result)
       : name_(move(name)), params_(move(params)), result_(move(result)) {
     reverse(params_.begin(), params_.end());
   }
@@ -347,11 +352,11 @@ class FunctionDec : public Dec {
 };
 
 class VarDec : public Dec {
-  string type_;
+  unique_ptr<Type> type_;
   unique_ptr<Exp> init_;
   // bool escape;
  public:
-  VarDec(string name, string type, unique_ptr<Exp> init)
+  VarDec(string name, unique_ptr<Type> type, unique_ptr<Exp> init)
       : Dec(move(name)), type_(move(type)), init_(move(init)) {}
   Value *codegen() override;
 
@@ -372,31 +377,38 @@ class TypeDec : public Dec {
 class NameType : public Type {
   string name_;
 
- public:
-  NameType(string name) : name_(move(name)) {}
+ protected:
   llvm::Type *codegen(string const &parentName) override;
+
+ public:
+  llvm::Type *codegen() override;
+  NameType(string name) : name_(move(name)) {}
   void print(int n) override;
 };
 
 class RecordType : public Type {
   vector<unique_ptr<Field>> fields_;
 
+ protected:
+  llvm::Type *codegen(string const &parentName) override;
+
  public:
   RecordType(vector<unique_ptr<Field>> fields) : fields_(move(fields)) {
     reverse(fields_.begin(), fields_.end());
   }
-  llvm::Type *codegen(string const &parentName) override;
-
+  llvm::Type *codegen() override;
   void print(int n) override;
 };
 
 class ArrayType : public Type {
   string name_;
 
- public:
-  ArrayType(string name) : name_(move(name)) {}
+ protected:
   llvm::Type *codegen(string const &parentName) override;
 
+ public:
+  ArrayType(string name) : name_(move(name)) {}
+  llvm::Type *codegen() override;
   void print(int n) override;
 };
 

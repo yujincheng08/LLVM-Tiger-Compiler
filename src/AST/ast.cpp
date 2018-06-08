@@ -81,7 +81,8 @@ void BinaryExp::print(int n) {
 void Field::print(int n) {
   blank(n);
   cout << "Field"
-       << " [ name: " << name_ << ", type: " << type_ << "]" << endl;
+       << " [ name: " << name_ << " ]" << endl;
+  type_->print(n + 1);
 }
 
 void FieldExp::print(int n) {
@@ -160,9 +161,9 @@ void LetExp::print(int n) {
 
 void ArrayExp::print(int n) {
   blank(n);
-  cout << "ArrayExp"
-       << " [ type: " << type_ << " ]" << endl;
+  cout << "ArrayExp" << endl;
 
+  type_->print(n + 1);
   size_->print(n + 1);
   init_->print(n + 1);
 }
@@ -170,7 +171,8 @@ void ArrayExp::print(int n) {
 void Prototype::print(int n) {
   blank(n);
   cout << "Prototype"
-       << " [ name: " << name_ << ", result: " << result_ << " ]" << endl;
+       << " [ name: " << name_ << " ]" << endl;
+  result_->print(n + 1);
 
   for (auto &param : params_) {
     param->print(n + 1);
@@ -188,9 +190,8 @@ void FunctionDec::print(int n) {
 
 void VarDec::print(int n) {
   blank(n);
-  cout << "VarDec"
-       << " [ type: " << type_ << " ]" << endl;
-
+  cout << "VarDec" << endl;
+  type_->print(n + 1);
   init_->print(n + 1);
 }
 

@@ -50,12 +50,11 @@ static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function *function,
   return TmpB.CreateAlloca(type, 0, name.c_str());
 }
 
-static llvm::Type *typeOf(std::string const &name) {
-  if (name == "int") return llvm::Type::getInt64Ty(context);
-  auto &type = types[name];
-  if (!type) return logErrorT(name + " is not a type");
-  return type->codegen(name);
-}
+// static llvm::Type *typeOf(std::string const &name) {
+//  auto &type = types[name];
+//  if (!type) return logErrorT(name + " is not a type");
+//  return type->codegen(name);
+//}
 
 llvm::Value *AST::Root::codegen() {
   module = llvm::make_unique<llvm::Module>("main", context);
@@ -64,6 +63,7 @@ llvm::Value *AST::Root::codegen() {
                                            llvm::makeArrayRef(args), false);
   auto mainFunction = llvm::Function::Create(
       mainProto, llvm::GlobalValue::ExternalLinkage, "main", module.get());
+  // types.push("int", llvm::Type::getInt64Ty(context));
   // functionStack.push(mainFunction);
   auto block = llvm::BasicBlock::Create(context, "entry", mainFunction);
 
@@ -149,8 +149,7 @@ llvm::Value *AST::ForExp::codegen() {
   // variable->addIncoming(low, preheadBB);
 
   auto oldVal = values[var_];
-  if(oldVal)
-    values.popOne(var_);
+  if (oldVal) values.popOne(var_);
   values.push(var_, variable);
   // TODO: check its non-type value
   if (!body_->codegen()) return nullptr;
@@ -332,11 +331,11 @@ llvm::Value *AST::ArrayExp::codegen() {}
 llvm::Function *AST::Prototype::codegen() {
   std::vector<llvm::Type *> args;
   for (auto &arg : params_) {
-    auto argType = typeOf(arg->type_);
+    auto argType = arg->type_->codegen();
     if (!argType) return nullptr;
     args.push_back(argType);
   }
-  auto retType = typeOf(result_);
+  auto retType = result_->codegen();
   auto oldFunc = functions[name_];
   if (oldFunc) rename(oldFunc->getName().str() + "-");
   auto functionType = llvm::FunctionType::get(retType, args, false);
@@ -383,16 +382,30 @@ llvm::Value *AST::FunctionDec::codegen() {
   return logErrorV("Function " + name_ + " genteration failed");
 }
 
+llvm::Type *AST::NameType::codegen() {
+  if (name_ == "int") return llvm::Type::getInt64Ty(context);
+  if (types[name_])
+    return types[name_]->codegen(name_);
+  else
+    return logErrorT(name_ + " is not a type");
+}
+
+llvm::Type *AST::RecordType::codegen() {}
+
+llvm::Type *AST::ArrayType::codegen() {}
+
 llvm::Type *AST::NameType::codegen(std::string const &parentName) {
   if (name_ == parentName)
     return logErrorT(name_ + " has an endless loop of type define");
+  if (name_ == "int") return llvm::Type::getInt64Ty(context);
   if (types[name_])
     return types[name_]->codegen(parentName);
   else
     return logErrorT(name_ + " is not a type");
 }
-llvm::Type *AST::ArrayType::codegen(string const &parentName) {}
-llvm::Type *AST::RecordType::codegen(string const &parentName) {}
+
+llvm::Type *AST::ArrayType::codegen(string const &) { return codegen(); }
+llvm::Type *AST::RecordType::codegen(string const &) { return codegen(); }
 llvm::Value *AST::StringExp::codegen() {}
 llvm::Value *AST::VarDec::codegen() {
   llvm::Function *functioin = builder.GetInsertBlock()->getParent();
@@ -401,10 +414,10 @@ llvm::Value *AST::VarDec::codegen() {
   if (values.lookupOne(name_))
     return logErrorV(name_ + " is already defined in this function.");
   llvm::Type *type;
-  if (type_.empty())
+  if (type_ == nullptr)
     type = init->getType();
   else {
-    type = typeOf(type_);
+    type = type_->codegen();
     if (!type) return nullptr;
   }
   auto *variable = createEntryBlockAlloca(functioin, type, name_);
