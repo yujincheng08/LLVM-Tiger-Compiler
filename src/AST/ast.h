@@ -176,6 +176,7 @@ class BinaryExp : public Exp {
 
 class Field {
   friend class Prototype;
+  friend class RecordType;
 
   string name_;
   unique_ptr<Type> type_;
@@ -188,6 +189,7 @@ class Field {
 };
 
 class FieldExp {
+  friend class RecordExp;
   string name_;
   unique_ptr<Exp> exp_;
 
@@ -199,12 +201,12 @@ class FieldExp {
 };
 
 class RecordExp : public Exp {
-  string name_;
+  unique_ptr<Type> type_;
   vector<unique_ptr<FieldExp>> fieldExps_;
 
  public:
-  RecordExp(string name, vector<unique_ptr<FieldExp>> fieldExps)
-      : name_(move(name)), fieldExps_(move(fieldExps)) {
+  RecordExp(unique_ptr<Type> type, vector<unique_ptr<FieldExp>> fieldExps)
+      : type_(move(type)), fieldExps_(move(fieldExps)) {
     reverse(fieldExps_.begin(), fieldExps_.end());
   }
   Value *codegen() override;
@@ -395,7 +397,6 @@ class ArrayType : public Type {
   unique_ptr<Type> type_;
 
  protected:
-
  public:
   ArrayType(unique_ptr<Type> name) : type_(move(name)) {}
   llvm::Type *codegen(string const &parentName) override;

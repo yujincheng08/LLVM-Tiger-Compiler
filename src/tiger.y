@@ -102,7 +102,7 @@ exp:              INT                       		{$$=new IntExp($1);}
                 | exp NEQ exp						{$$=new BinaryExp(BinaryExp::NEQU, std::unique_ptr<Exp>($1), std::unique_ptr<Exp>($3));}
                 | id LPAREN arglist RPAREN			{$$=new CallExp(*$1, std::move(*$3)); delete $1;}
                 | id LBRACK exp RBRACK OF exp		{$$=new ArrayExp(llvm::make_unique<NameType>(*$1), std::unique_ptr<Exp>($3), std::unique_ptr<Exp>($6)); delete $1;}
-                | id LBRACE reclist RBRACE			{$$=new RecordExp(*$1, std::move(*$3)); delete $1;}
+                | id LBRACE reclist RBRACE			{$$=new RecordExp(llvm::make_unique<NameType>(*$1), std::move(*$3)); delete $1;}
                 | BREAK								{$$=new BreakExp();}
                 ;
 

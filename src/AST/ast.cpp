@@ -94,8 +94,8 @@ void FieldExp::print(int n) {
 
 void RecordExp::print(int n) {
   blank(n);
-  cout << "RecordExp"
-       << " [ name: " << name_ << " ]" << endl;
+  cout << "RecordExp" << endl;
+  type_->print(n + 1);
   for (auto &fieldExp : fieldExps_) {
     fieldExp->print(n + 1);
   }
