@@ -8,7 +8,7 @@ int yylex(void); /* function prototype */
 
 std::unique_ptr<Root> root;
 
-void yyerror(char *s)
+void tigererror(char *s)
 {
   std::cerr<<s<<std::endl;
 }

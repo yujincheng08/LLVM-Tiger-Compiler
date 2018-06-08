@@ -1,15 +1,16 @@
 #ifndef AST_H
 #define AST_H
 
+#include <llvm/IR/Value.h>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <llvm/IR/Value.h>
-
 namespace AST {
 using llvm::Value;
 using std::move;
+using std::reverse;
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -130,7 +131,9 @@ class CallExp : public Exp {
 
  public:
   CallExp(string func, vector<unique_ptr<Exp>> args)
-      : func_(move(func)), args_(move(args)) {}
+      : func_(move(func)), args_(move(args)) {
+    reverse(args_.begin(), args_.end());
+  }
   Value *codegen() override;
 
   void print(int n) override;
@@ -200,7 +203,9 @@ class RecordExp : public Exp {
 
  public:
   RecordExp(string name, vector<unique_ptr<FieldExp>> fieldExps)
-      : name_(move(name)), fieldExps_(move(fieldExps)) {}
+      : name_(move(name)), fieldExps_(move(fieldExps)) {
+    reverse(fieldExps_.begin(), fieldExps_.end());
+  }
   Value *codegen() override;
 
   void print(int n) override;
@@ -210,7 +215,9 @@ class SequenceExp : public Exp {
   vector<unique_ptr<Exp>> exps_;
 
  public:
-  SequenceExp(vector<unique_ptr<Exp>> exps) : exps_(move(exps)) {}
+  SequenceExp(vector<unique_ptr<Exp>> exps) : exps_(move(exps)) {
+    reverse(exps_.begin(), exps_.end());
+  }
   Value *codegen() override;
 
   void print(int n) override;
@@ -287,7 +294,9 @@ class LetExp : public Exp {
 
  public:
   LetExp(vector<unique_ptr<Dec>> decs, unique_ptr<Exp> body)
-      : decs_(move(decs)), body_(move(body)) {}
+      : decs_(move(decs)), body_(move(body)) {
+    reverse(decs_.begin(), decs_.end());
+  }
   Value *codegen() override;
 
   void print(int n) override;
@@ -313,7 +322,9 @@ class Prototype {
 
  public:
   Prototype(string name, vector<unique_ptr<Field>> params, string result)
-      : name_(move(name)), params_(move(params)), result_(move(result)) {}
+      : name_(move(name)), params_(move(params)), result_(move(result)) {
+    reverse(params_.begin(), params_.end());
+  }
   llvm::Function *codegen();
 
   const std::string &getName() const { return name_; }
@@ -324,7 +335,6 @@ class Prototype {
 };
 
 class FunctionDec : public Dec {
-  string name_;
   unique_ptr<Prototype> proto_;
   unique_ptr<Exp> body_;
 
@@ -372,7 +382,9 @@ class RecordType : public Type {
   vector<unique_ptr<Field>> fields_;
 
  public:
-  RecordType(vector<unique_ptr<Field>> fields) : fields_(move(fields)) {}
+  RecordType(vector<unique_ptr<Field>> fields) : fields_(move(fields)) {
+    reverse(fields_.begin(), fields_.end());
+  }
   llvm::Type *codegen(string const &parentName) override;
 
   void print(int n) override;

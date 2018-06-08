@@ -21,14 +21,14 @@ static llvm::IRBuilder<> builder(context);
 static std::unique_ptr<llvm::Module> module;
 // static std::unordered_map<std::string, llvm::AllocaInst *> values;
 static SymbolTable<llvm::AllocaInst> values;
-// static SymbolTable<llvm::Function> functions;
+static SymbolTable<llvm::Function> functions;
 // static std::stack<llvm::Function *> functionStack;
 // static std::unordered_map<std::string, std::unique_ptr<AST::Type>> types;
 static SymbolTable<AST::Type> types;
 static std::stack<
     std::tuple<llvm::BasicBlock * /*next*/, llvm::BasicBlock * /*after*/>>
     loopStack;
-static std::map<std::string, std::unique_ptr<AST::Prototype>> FunctionProtos;
+// static std::map<std::string, std::unique_ptr<AST::Prototype>> FunctionProtos;
 
 // TODO: FUNCTION STATIC LINK USING FUNCTION::SIZE()??
 
@@ -127,13 +127,21 @@ llvm::Value *AST::ForExp::codegen() {
   // before loop:
   builder.CreateStore(low, variable);
 
+  auto testBB = llvm::BasicBlock::Create(context, "test", function);
   auto loopBB = llvm::BasicBlock::Create(context, "loop", function);
   auto nextBB = llvm::BasicBlock::Create(context, "next", function);
   auto afterBB = llvm::BasicBlock::Create(context, "after", function);
   loopStack.push({nextBB, afterBB});
 
-  // goto loop
-  builder.CreateBr(loopBB);
+  builder.CreateBr(testBB);
+
+  builder.SetInsertPoint(testBB);
+
+  auto EndCond = builder.CreateICmpSLE(variable, high, "loopcond");
+  // auto loopEndBB = builder.GetInsertBlock();
+
+  // goto after or loop
+  builder.CreateCondBr(EndCond, loopBB, afterBB);
 
   builder.SetInsertPoint(loopBB);
 
@@ -141,7 +149,9 @@ llvm::Value *AST::ForExp::codegen() {
   // variable->addIncoming(low, preheadBB);
 
   auto oldVal = values[var_];
-  values[var_] = variable;
+  if(oldVal)
+    values.popOne(var_);
+  values.push(var_, variable);
   // TODO: check its non-type value
   if (!body_->codegen()) return nullptr;
 
@@ -156,11 +166,7 @@ llvm::Value *AST::ForExp::codegen() {
       llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
   builder.CreateStore(nextVar, variable);
 
-  auto EndCond = builder.CreateICmpSLE(nextVar, high, "loopcond");
-  // auto loopEndBB = builder.GetInsertBlock();
-
-  // goto after or loop
-  builder.CreateCondBr(EndCond, loopBB, afterBB);
+  builder.CreateBr(testBB);
 
   // after:
   builder.SetInsertPoint(afterBB);
@@ -186,8 +192,10 @@ llvm::Value *AST::SequenceExp::codegen() {
 
 llvm::Value *AST::LetExp::codegen() {
   values.enter();
+  functions.enter();
   for (auto &dec : decs_) dec->codegen();
   auto result = body_->codegen();
+  functions.exit();
   values.exit();
   return result;
 }
@@ -202,7 +210,8 @@ llvm::Value *AST::AssignExp::codegen() {
   if (!var) return nullptr;
   auto exp = exp_->codegen();
   if (!exp) return nullptr;
-  return builder.CreateStore(exp, var);
+  builder.CreateStore(exp, var);
+  return var;
 }
 
 llvm::Value *AST::IfExp::codegen() {
@@ -232,7 +241,7 @@ llvm::Value *AST::IfExp::codegen() {
   builder.SetInsertPoint(elseBB);
 
   llvm::Value *elsee;
-  if (elsee) {
+  if (else_) {
     elsee = else_->codegen();
     if (!elsee) return nullptr;
   }
@@ -253,9 +262,56 @@ llvm::Value *AST::IfExp::codegen() {
   return PN;
 }
 
-llvm::Value *AST::WhileExp::codegen() {}
+llvm::Value *AST::WhileExp::codegen() {
+  auto function = builder.GetInsertBlock()->getParent();
+  // TODO: it should read only in the body
+  auto testBB = llvm::BasicBlock::Create(context, "test", function);
+  auto loopBB = llvm::BasicBlock::Create(context, "loop", function);
+  auto nextBB = llvm::BasicBlock::Create(context, "next", function);
+  auto afterBB = llvm::BasicBlock::Create(context, "after", function);
+  loopStack.push({nextBB, afterBB});
+
+  builder.CreateBr(testBB);
+
+  builder.SetInsertPoint(testBB);
+
+  auto test = test_->codegen();
+  if (!test) return nullptr;
+
+  auto EndCond = builder.CreateICmpNE(
+      test,
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+                             llvm::APInt(1, 0)),
+      "loopcond");
+  // auto loopEndBB = builder.GetInsertBlock();
+
+  // goto after or loop
+  builder.CreateCondBr(EndCond, loopBB, afterBB);
+
+  builder.SetInsertPoint(loopBB);
+
+  // loop:
+
+  if (!body_->codegen()) return nullptr;
+
+  // goto next:
+  builder.CreateBr(nextBB);
+
+  // next:
+  builder.SetInsertPoint(nextBB);
+
+  builder.CreateBr(testBB);
+
+  // after:
+  builder.SetInsertPoint(afterBB);
+
+  // variable->addIncoming(next, loopEndBB);
+
+  return llvm::Constant::getNullValue(llvm::Type::getInt64Ty(context));
+}
+
 llvm::Value *AST::CallExp::codegen() {
-  auto *callee = module->getFunction(func_);
+  auto callee = functions[func_];
   if (!callee) return logErrorV("Unknown function referenced");
 
   // If argument mismatch error.
@@ -270,6 +326,7 @@ llvm::Value *AST::CallExp::codegen() {
 
   return builder.CreateCall(callee, args, "calltmp");
 }
+
 llvm::Value *AST::ArrayExp::codegen() {}
 
 llvm::Function *AST::Prototype::codegen() {
@@ -280,7 +337,8 @@ llvm::Function *AST::Prototype::codegen() {
     args.push_back(argType);
   }
   auto retType = typeOf(result_);
-  if (FunctionProtos[name_]) rename(name_ + "-");
+  auto oldFunc = functions[name_];
+  if (oldFunc) rename(oldFunc->getName().str() + "-");
   auto functionType = llvm::FunctionType::get(retType, args, false);
   auto function = llvm::Function::Create(
       functionType, llvm::Function::InternalLinkage, name_, module.get());
@@ -291,32 +349,38 @@ llvm::Function *AST::Prototype::codegen() {
 }
 
 llvm::Value *AST::FunctionDec::codegen() {
-  auto &proto = *proto_;
-  auto oldFunc = std::move(FunctionProtos[name_]);
-  FunctionProtos[name_] = std::move(proto_);
-  auto function = module->getFunction(proto.getName());
+  auto function = proto_->codegen();
+  if (functions.lookupOne(name_))
+    return logErrorV("Function " + name_ +
+                     " is already defined in same scope.");
+  // auto function = module->getFunction(proto.getName());
   if (!function) return nullptr;
+  functions.push(name_, function);
 
-  auto BB = llvm::BasicBlock::Create(context, "enty", function);
+  auto oldBB = builder.GetInsertBlock();
+  auto BB = llvm::BasicBlock::Create(context, "entry", function);
   builder.SetInsertPoint(BB);
   values.enter();
   for (auto &arg : function->args()) {
     auto argName = arg.getName();
     auto argAlloca = createEntryBlockAlloca(function, arg.getType(), argName);
     builder.CreateStore(&arg, argAlloca);
-    values[argName] = argAlloca;
+    values.push(argName, argAlloca);
   }
 
   if (auto retVal = body_->codegen()) {
     builder.CreateRet(retVal);
+    // TODO: check return value
     llvm::verifyFunction(*function);
-    if (oldFunc) FunctionProtos[name_] = std::move(oldFunc);
     values.exit();
+    builder.SetInsertPoint(oldBB);
     return function;
   }
   values.exit();
   function->eraseFromParent();
-  return nullptr;
+  functions.popOne(name_);
+  builder.SetInsertPoint(oldBB);
+  return logErrorV("Function " + name_ + " genteration failed");
 }
 
 llvm::Type *AST::NameType::codegen(std::string const &parentName) {
@@ -345,7 +409,7 @@ llvm::Value *AST::VarDec::codegen() {
   }
   auto *variable = createEntryBlockAlloca(functioin, type, name_);
   builder.CreateStore(init, variable);
-  values[name_] = variable;
+  values.push(name_, variable);
   return variable;
 }
 

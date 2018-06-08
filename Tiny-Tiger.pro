@@ -72,7 +72,8 @@ HEADERS += \
 #    src/assem.h \
 #    src/translate.h \
 #    src/frame.h \
-    src/AST/ast.h
+    src/AST/ast.h \
+    src/utils/symboltable.h
 
 OTHER_FILES += \
     src/tiger.l \

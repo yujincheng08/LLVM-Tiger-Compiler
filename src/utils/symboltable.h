@@ -51,6 +51,12 @@ T *&SymbolTable<T>::lookupOne(const std::string &name) {
   return stack_.front()[name];
 }
 
+template<typename T>
+void SymbolTable<T>::push(const std::string &name, T *const val)
+{
+  stack_.front()[name] = val;
+}
+
 template <typename T>
 void SymbolTable<T>::popOne(const std::string &name) {
   stack_.front().erase(name);

@@ -17,8 +17,10 @@ int main(int argc, char *argv[]) {
   llvm::InitializeNativeTargetAsmParser();
 
   tigerparse();
-  root->print(0);
-  root->codegen();
+  if(root){
+        root->print(0);
+        root->codegen();
+  }
   // return a.exec();
   return 0;
 }
