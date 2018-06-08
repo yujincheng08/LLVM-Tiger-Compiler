@@ -8,20 +8,18 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-#LLVM = llvm-config
+LLVM = llvm-config
 
 TARGET = Tiny-Tiger
 TEMPLATE = app
 
-#INCLUDEPATH += $$system($$LLVM --includedir)
+INCLUDEPATH += $$system($$LLVM --includedir)
 # llvm
-INCLUDEPATH += /usr/local/Cellar/llvm/6.0.0/include
-LIBS += -L"/usr/local/Cellar/llvm/6.0.0/lib" -lllvm
 
 
-#QMAKE_CXXFLAGS += $(shell $$LLVM --cxxflags)
+QMAKE_CXXFLAGS += $(shell $$LLVM --cxxflags)
 
-#LIBS += $(shell $$LLVM --ldflags --system-libs --libs all)
+LIBS += $(shell $$LLVM --ldflags --system-libs --libs all)
 
 LEXSOURCES = src/tiger.l
 YACCSOURCES = src/tiger.y

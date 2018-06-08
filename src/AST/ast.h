@@ -25,29 +25,32 @@ class Node {
   virtual void print(int n) = 0;
 };
 
-class Var : public Node {
- public:
-  void print(int n) override;
-};
+class Var : public Node {};
 
-class Exp : public Node {
+class Exp : public Node {};
+
+class Root : public Node {
+  unique_ptr<Exp> root_;
+
  public:
+  Root(unique_ptr<Exp> root) : root_(move(root)) {}
+  Value *codegen() override;
   void print(int n) override;
 };
 
 class Dec : public Node {
+ protected:
   string name_;
 
  public:
   Dec(string name) : name_(move(name)) {}
-  void print(int n) override;
 };
 
 class Type {
  public:
   virtual ~Type() = default;
-  virtual llvm::Type *codegen() = 0;
-  virtual void print(int n);
+  virtual llvm::Type *codegen(string const &parentName) = 0;
+  virtual void print(int n) = 0;
 };
 
 class SimpleVar : public Var {
@@ -169,14 +172,15 @@ class BinaryExp : public Exp {
 };
 
 class Field {
+  friend class Prototype;
+
   string name_;
-  unique_ptr<Type> type_;
+  string type_;
 
  public:
-  Field(string name, unique_ptr<Type> type)
-      : name_(move(name)), type_(move(type)) {}
+  Field(string name, string type) : name_(move(name)), type_(move(type)) {}
 
-  virtual void print(int n);
+  void print(int n);
 };
 
 class FieldExp {
@@ -187,7 +191,7 @@ class FieldExp {
   FieldExp(string name, unique_ptr<Exp> exp)
       : name_(move(name)), exp_(move(exp)) {}
 
-  virtual void print(int n);
+  void print(int n);
 };
 
 class RecordExp : public Exp {
@@ -312,6 +316,10 @@ class Prototype {
       : name_(move(name)), params_(move(params)), result_(move(result)) {}
   llvm::Function *codegen();
 
+  const std::string &getName() const { return name_; }
+
+  void rename(string name) { name_ = move(name); }
+
   void print(int n);
 };
 
@@ -356,8 +364,8 @@ class NameType : public Type {
 
  public:
   NameType(string name) : name_(move(name)) {}
-  llvm::Type *codegen() override;
-  void print(int n);
+  llvm::Type *codegen(string const &parentName) override;
+  void print(int n) override;
 };
 
 class RecordType : public Type {
@@ -365,9 +373,9 @@ class RecordType : public Type {
 
  public:
   RecordType(vector<unique_ptr<Field>> fields) : fields_(move(fields)) {}
-  llvm::Type *codegen() override;
+  llvm::Type *codegen(string const &parentName) override;
 
-  void print(int n);
+  void print(int n) override;
 };
 
 class ArrayType : public Type {
@@ -375,9 +383,9 @@ class ArrayType : public Type {
 
  public:
   ArrayType(string name) : name_(move(name)) {}
-  llvm::Type *codegen() override;
+  llvm::Type *codegen(string const &parentName) override;
 
-  void print(int n);
+  void print(int n) override;
 };
 
 }  // namespace AST

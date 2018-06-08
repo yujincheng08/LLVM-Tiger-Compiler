@@ -53,7 +53,7 @@ extern "C" int yywrap(void)
 "type"     {ADJ; return TYPE;}
 "while"    {ADJ; return WHILE;}
 "var"      {ADJ; return VAR;}
-[a-zA-Z][a-zA-Z0-9_]*    {ADJ; std::cout<<yytext<<std::endl; tigerlval.sval=new string(yytext); return ID;}
+[a-zA-Z][a-zA-Z0-9_]*    {ADJ; tigerlval.sval=new string(yytext); return ID;}
 [0-9]+	   {ADJ; tigerlval.ival=atoi(yytext); return INT;}
 "+"        {ADJ; return PLUS;}
 "-"        {ADJ; return MINUS;}

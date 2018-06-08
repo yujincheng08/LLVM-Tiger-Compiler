@@ -1,114 +1,69 @@
 #include "ast.h"
+#include <iostream>
 
 using namespace AST;
+using namespace std;
 
-void blank(int n) {
+static void blank(int n) {
   for (int i = 0; i < n; i++) {
-    printf("___");
+    cout << "___";
   }
 }
 
-void line() { printf("\n"); }
+void Root::print(int n) {
+  blank(n);
+  cout << "Root" << endl;
 
-void Var::print(int n) {
-  //  blank(n);
-  //  printf("Var");
-  //  line();
-}
-
-void Exp::print(int n) {
-  //  blank(n);
-  //  printf("Exp");
-  //  line();
-}
-
-void Dec::print(int n) {
-  //  blank(n);
-  //  printf("Dec");
-  //  line();
-
-  //  blank(n + 1);
-  //  printf("name_:%s", name_.c_str());
-  //  line();
-}
-
-void Type::print(int n) {
-  //  blank(n);
-  //  printf("Type");
-  //  line();
+  root_->print(n + 1);
 }
 
 void SimpleVar::print(int n) {
   blank(n);
-  printf("SimpleVar");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
+  cout << "SimpleVar"
+       << " [ name: " << name_ << " ]" << endl;
 }
 
 void FieldVar::print(int n) {
   blank(n);
-  printf("FieldVar");
-  line();
-
+  cout << "FieldVar"
+       << " [ filed: " << field_ << " ]" << endl;
   var_->print(n + 1);
-
-  blank(n + 1);
-  printf("field_:%s", field_.c_str());
-  line();
 }
 
 void SubscriptVar::print(int n) {
   blank(n);
-  printf("SubscriptVar");
-  line();
+  cout << "SubscriptVar" << endl;
   var_->print(n + 1);
   exp_->print(n + 1);
 }
 
 void VarExp::print(int n) {
   blank(n);
-  printf("VarExp");
-  line();
+  cout << "VarExp" << endl;
   var_->print(n + 1);
 }
 
 void NilExp::print(int n) {
-  //  blank(n);
-  //  printf("NilExp");
-  //  line();
+  blank(n);
+  cout << "Nil" << endl;
 }
 
 void IntExp::print(int n) {
   blank(n);
-  printf("IntExp");
-  line();
-
-  blank(n + 1);
-  printf("val_:%d", val_);
-  line();
+  cout << "IntExp"
+       << " [ val: " << val_ << " ]" << endl;
 }
 
 void StringExp::print(int n) {
   blank(n);
-  printf("StringExp");
-  line();
-
-  blank(n + 1);
-  printf("val_:%s", val_.c_str());
-  line();
+  cout << "StringExp"
+       << " [ val: " << val_ << " ]" << endl;
 }
 
 void CallExp::print(int n) {
   blank(n);
-  printf("CallExp");
-  line();
-
-  blank(n + 1);
-  printf("func_:%s", func_.c_str());
-  line();
+  cout << "CallExp"
+       << " [ func: " << func_ << " ]" << endl;
 
   for (auto &arg : args_) {
     arg->print(n + 1);
@@ -117,50 +72,29 @@ void CallExp::print(int n) {
 
 void BinaryExp::print(int n) {
   blank(n);
-  printf("BinaryExp");
-  line();
-
-  blank(n + 1);
-  printf("op_:%c", op_);
-  line();
-
+  cout << "BinaryExp"
+       << " [ op: " << (char)op_ << " ]" << endl;
   left_->print(n + 1);
   right_->print(n + 1);
 }
 
 void Field::print(int n) {
   blank(n);
-  printf("Field");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
-
-  type_->print(n + 1);
+  cout << "Field"
+       << " [ name: " << name_ << ", type: " << type_ << "]" << endl;
 }
 
 void FieldExp::print(int n) {
   blank(n);
-  printf("FieldExp");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
-
+  cout << "FieldExp"
+       << " [ name: " << name_ << " ]" << endl;
   exp_->print(n + 1);
 }
 
 void RecordExp::print(int n) {
   blank(n);
-  printf("RecordExp");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
-
+  cout << "RecordExp"
+       << " [ name: " << name_ << " ]" << endl;
   for (auto &fieldExp : fieldExps_) {
     fieldExp->print(n + 1);
   }
@@ -168,8 +102,7 @@ void RecordExp::print(int n) {
 
 void SequenceExp::print(int n) {
   blank(n);
-  printf("SequenceExp");
-  line();
+  cout << "SequenceExp" << endl;
 
   for (auto &exp : exps_) {
     exp->print(n + 1);
@@ -178,8 +111,7 @@ void SequenceExp::print(int n) {
 
 void AssignExp::print(int n) {
   blank(n);
-  printf("AssignExp");
-  line();
+  cout << "AssignExp" << endl;
 
   var_->print(n + 1);
   exp_->print(n + 1);
@@ -187,18 +119,16 @@ void AssignExp::print(int n) {
 
 void IfExp::print(int n) {
   blank(n);
-  printf("IfExp");
-  line();
+  cout << "IfExp" << endl;
 
   test_->print(n + 1);
   then_->print(n + 1);
-  else_->print(n + 1);
+  if (else_) else_->print(n + 1);
 }
 
 void WhileExp::print(int n) {
   blank(n);
-  printf("WhileExp");
-  line();
+  cout << "WhileExp" << endl;
 
   test_->print(n + 1);
   body_->print(n + 1);
@@ -206,12 +136,8 @@ void WhileExp::print(int n) {
 
 void ForExp::print(int n) {
   blank(n);
-  printf("ForExp");
-  line();
-
-  blank(n + 1);
-  printf("var_:%s", var_.c_str());
-  line();
+  cout << "ForExp"
+       << " [ var: " << var_ << " ]" << endl;
 
   low_->print(n + 1);
   high_->print(n + 1);
@@ -220,14 +146,12 @@ void ForExp::print(int n) {
 
 void BreakExp::print(int n) {
   blank(n);
-  printf("Break");
-  line();
+  cout << "Break" << endl;
 }
 
 void LetExp::print(int n) {
   blank(n);
-  printf("LetExp");
-  line();
+  cout << "LetExp" << endl;
   for (auto &dec : decs_) {
     dec->print(n + 1);
   }
@@ -236,12 +160,8 @@ void LetExp::print(int n) {
 
 void ArrayExp::print(int n) {
   blank(n);
-  printf("ArrayExp");
-  line();
-
-  blank(n + 1);
-  printf("type_:%s", type_.c_str());
-  line();
+  cout << "ArrayExp"
+       << " [ type: " << type_ << " ]" << endl;
 
   size_->print(n + 1);
   init_->print(n + 1);
@@ -249,29 +169,18 @@ void ArrayExp::print(int n) {
 
 void Prototype::print(int n) {
   blank(n);
-  printf("Prototype");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
+  cout << "Prototype"
+       << " [ name: " << name_ << ", result: " << result_ << " ]" << endl;
 
   for (auto &param : params_) {
     param->print(n + 1);
   }
-  blank(n + 1);
-  printf("result_:%s", result_.c_str());
-  line();
 }
 
 void FunctionDec::print(int n) {
   blank(n);
-  printf("FunctionDec");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
+  cout << "FunctionDec"
+       << " [ name: " << name_ << " ]" << endl;
 
   proto_->print(n + 1);
   body_->print(n + 1);
@@ -279,38 +188,27 @@ void FunctionDec::print(int n) {
 
 void VarDec::print(int n) {
   blank(n);
-  printf("VarDec");
-  line();
-
-  blank(n + 1);
-  printf("type_:%s", type_.c_str());
-  line();
+  cout << "VarDec"
+       << " [ type: " << type_ << " ]" << endl;
 
   init_->print(n + 1);
 }
 
 void TypeDec::print(int n) {
   blank(n);
-  printf("TypeDec");
-  line();
-
+  cout << "TypeDec" << endl;
   type_->print(n + 1);
 }
 
 void NameType::print(int n) {
   blank(n);
-  printf("NameType");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
+  cout << "NameType"
+       << " [ name: " << name_ << " ]" << endl;
 }
 
 void RecordType::print(int n) {
   blank(n);
-  printf("RecordType");
-  line();
+  cout << "RecordType";
   for (auto &field : fields_) {
     field->print(n + 1);
   }
@@ -318,10 +216,6 @@ void RecordType::print(int n) {
 
 void ArrayType::print(int n) {
   blank(n);
-  printf("ArrayType");
-  line();
-
-  blank(n + 1);
-  printf("name_:%s", name_.c_str());
-  line();
+  cout << "ArrayType"
+       << " [ name: " << name_ << " ]" << endl;
 }
