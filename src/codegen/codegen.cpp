@@ -44,10 +44,11 @@ static llvm::Type *logErrorT(std::string const &msg) {
 
 static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function *function,
                                                 llvm::Type *type,
-                                                const std::string &name) {
+                                                const std::string &name,
+                                                llvm::Value *size = nullptr) {
   llvm::IRBuilder<> TmpB(&function->getEntryBlock(),
                          function->getEntryBlock().begin());
-  return TmpB.CreateAlloca(type, 0, name.c_str());
+  return TmpB.CreateAlloca(type, size, name.c_str());
 }
 
 // static llvm::Type *typeOf(std::string const &name) {
@@ -83,19 +84,6 @@ llvm::Value *AST::SimpleVar::codegen() {
   if (!var) return logErrorV("Unknown variable name " + name_);
   return builder.CreateLoad(var, name_.c_str());
 }
-
-llvm::Value *AST::FieldVar::codegen() {
-  auto var = var_->codegen();
-  if (!var) return nullptr;  // TODO: Should I log something?
-  auto type = var->getType();
-  if (!llvm::isa<llvm::StructType>(type))
-    return logErrorV(var->getName().str() + " is not a struct type");
-  auto *structType = llvm::cast<llvm::StructType>(type);
-  structType->elements();
-  // TODO
-}
-
-llvm::Value *AST::SubscriptVar::codegen() {}
 
 llvm::Value *AST::IntExp::codegen() {
   return llvm::ConstantInt::get(context, llvm::APInt(64, val_));
@@ -161,8 +149,7 @@ llvm::Value *AST::ForExp::codegen() {
   builder.SetInsertPoint(nextBB);
 
   auto nextVar = builder.CreateAdd(
-      builder.CreateLoad(variable, var_),
-      llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
+      variable, llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
   builder.CreateStore(nextVar, variable);
 
   builder.CreateBr(testBB);
@@ -182,7 +169,6 @@ llvm::Value *AST::ForExp::codegen() {
   return llvm::Constant::getNullValue(llvm::Type::getInt64Ty(context));
 }
 
-llvm::Value *AST::RecordExp::codegen() {}
 llvm::Value *AST::SequenceExp::codegen() {
   llvm::Value *last = nullptr;
   for (auto &exp : exps_) last = exp->codegen();
@@ -326,7 +312,114 @@ llvm::Value *AST::CallExp::codegen() {
   return builder.CreateCall(callee, args, "calltmp");
 }
 
-llvm::Value *AST::ArrayExp::codegen() {}
+llvm::Value *AST::ArrayExp::codegen() {
+  auto function = builder.GetInsertBlock()->getParent();
+  auto type = type_->codegen();
+  if (!type->isPointerTy()) return logErrorV("Array type required");
+  auto eleType = llvm::cast<llvm::PointerType>(type)->getElementType();
+  auto size = size_->codegen();
+  auto init = init_->codegen();
+  //  auto arrayPtr = createEntryBlockAlloca(function, type, "array", size);
+  //  auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+  //                                     llvm::APInt(64, 0));
+  //  auto ptr =
+  //      llvm::GetElementPtrInst::Create(type, arrayPtr, {zero, zero},
+  //      "eleptr");
+  auto arrayPtr = createEntryBlockAlloca(function, eleType, "arrayPtr", size);
+  auto zero = llvm::ConstantInt::get(context, llvm::APInt(64, 0, true));
+
+  std::string indexName = "index";
+  auto index = createEntryBlockAlloca(function, llvm::Type::getInt64Ty(context),
+                                      indexName);
+  // before loop:
+  builder.CreateStore(zero, index);
+
+  auto testBB = llvm::BasicBlock::Create(context, "test", function);
+  auto loopBB = llvm::BasicBlock::Create(context, "loop", function);
+  auto nextBB = llvm::BasicBlock::Create(context, "next", function);
+  auto afterBB = llvm::BasicBlock::Create(context, "after", function);
+
+  builder.CreateBr(testBB);
+
+  builder.SetInsertPoint(testBB);
+
+  auto EndCond = builder.CreateICmpSLT(index, size, "loopcond");
+  // auto loopEndBB = builder.GetInsertBlock();
+
+  // goto after or loop
+  builder.CreateCondBr(EndCond, loopBB, afterBB);
+
+  builder.SetInsertPoint(loopBB);
+
+  // loop:
+  // variable->addIncoming(low, preheadBB);
+
+  auto oldVal = values[indexName];
+  if (oldVal) values.popOne(indexName);
+  values.push(indexName, index);
+  // TODO: check its non-type value
+  auto elePtr = builder.CreateGEP(eleType, arrayPtr, index, "elePtr");
+  builder.CreateStore(init, elePtr);
+  // goto next:
+  builder.CreateBr(nextBB);
+
+  // next:
+  builder.SetInsertPoint(nextBB);
+
+  auto nextVar = builder.CreateAdd(
+      index, llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
+  builder.CreateStore(nextVar, index);
+
+  builder.CreateBr(testBB);
+
+  // after:
+  builder.SetInsertPoint(afterBB);
+
+  // variable->addIncoming(next, loopEndBB);
+
+  if (oldVal)
+    values[indexName] = oldVal;
+  else
+    values.popOne(indexName);
+
+  return arrayPtr;
+}
+
+llvm::Value *AST::SubscriptVar::codegen() {
+  auto var = var_->codegen();
+  if (!var) return nullptr;
+  auto type = var->getType();
+  if (!type->isPointerTy())
+    return logErrorV("Subscript is only for array type.");
+  auto eleType = llvm::cast<llvm::PointerType>(type)->getElementType();
+  auto exp = exp_->codegen();
+  if (!exp) return nullptr;
+  if (exp->getType() != llvm::Type::getInt64Ty(context))
+    return logErrorV("Subscript has to be integer value.");
+  return builder.CreateGEP(eleType, var, exp, "ptr");
+}
+
+llvm::Value *AST::FieldVar::codegen() {
+  auto var = var_->codegen();
+  if (!var) return nullptr;  // TODO: Should I log something?
+  auto type = var->getType();
+  if (!llvm::isa<llvm::StructType>(type))
+    return logErrorV(var->getName().str() + " is not a struct type");
+  auto *structType = llvm::cast<llvm::StructType>(type);
+  structType->elements();
+  // TODO
+}
+
+llvm::Value *AST::RecordExp::codegen() {}
+
+llvm::Type *AST::ArrayType::codegen(std::string const &) {
+  auto type = type_->codegen();
+  if (!type) return nullptr;
+  return llvm::PointerType::getUnqual(type);
+}
+llvm::Type *AST::RecordType::codegen(std::string const &) {}
+
+llvm::Value *AST::StringExp::codegen() {}
 
 llvm::Function *AST::Prototype::codegen() {
   std::vector<llvm::Type *> args;
@@ -382,31 +475,19 @@ llvm::Value *AST::FunctionDec::codegen() {
   return logErrorV("Function " + name_ + " genteration failed");
 }
 
-llvm::Type *AST::NameType::codegen() {
-  if (name_ == "int") return llvm::Type::getInt64Ty(context);
-  if (types[name_])
-    return types[name_]->codegen(name_);
-  else
-    return logErrorT(name_ + " is not a type");
-}
-
-llvm::Type *AST::RecordType::codegen() {}
-
-llvm::Type *AST::ArrayType::codegen() {}
-
 llvm::Type *AST::NameType::codegen(std::string const &parentName) {
   if (name_ == parentName)
     return logErrorT(name_ + " has an endless loop of type define");
   if (name_ == "int") return llvm::Type::getInt64Ty(context);
   if (types[name_])
-    return types[name_]->codegen(parentName);
+    if (parentName.empty())
+      return types[name_]->codegen(name_);
+    else
+      return types[name_]->codegen(parentName);
   else
     return logErrorT(name_ + " is not a type");
 }
 
-llvm::Type *AST::ArrayType::codegen(string const &) { return codegen(); }
-llvm::Type *AST::RecordType::codegen(string const &) { return codegen(); }
-llvm::Value *AST::StringExp::codegen() {}
 llvm::Value *AST::VarDec::codegen() {
   llvm::Function *functioin = builder.GetInsertBlock()->getParent();
   auto init = init_->codegen();

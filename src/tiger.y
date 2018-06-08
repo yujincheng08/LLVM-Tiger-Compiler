@@ -158,7 +158,7 @@ tydec:            TYPE id EQ ty						{$$=new TypeDec(*$2, std::unique_ptr<Type>(
 
 ty:               id								{$$=new NameType(*$1); delete $1;}
                 | LBRACE tyfields RBRACE			{$$=new RecordType(std::move(*$2));}
-                | ARRAY OF id						{$$=new ArrayType(*$3); delete $3;}
+                | ARRAY OF id						{$$=new ArrayType(llvm::make_unique<NameType>(*$3)); delete $3;}
                 ;
 
 tyfields:       /* empty */							{$$=new std::vector<std::unique_ptr<Field>>();}

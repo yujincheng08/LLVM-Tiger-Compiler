@@ -49,11 +49,8 @@ class Dec : public Node {
 
 class Type {
  public:
-  virtual llvm::Type *codegen(string const &parentName) = 0;
-
- public:
   virtual ~Type() = default;
-  virtual llvm::Type *codegen() = 0;
+  virtual llvm::Type *codegen(string const &parentName = "") = 0;
   virtual void print(int n) = 0;
 };
 
@@ -377,11 +374,8 @@ class TypeDec : public Dec {
 class NameType : public Type {
   string name_;
 
- protected:
-  llvm::Type *codegen(string const &parentName) override;
-
  public:
-  llvm::Type *codegen() override;
+  llvm::Type *codegen(string const &parentName) override;
   NameType(string name) : name_(move(name)) {}
   void print(int n) override;
 };
@@ -389,26 +383,22 @@ class NameType : public Type {
 class RecordType : public Type {
   vector<unique_ptr<Field>> fields_;
 
- protected:
-  llvm::Type *codegen(string const &parentName) override;
-
  public:
   RecordType(vector<unique_ptr<Field>> fields) : fields_(move(fields)) {
     reverse(fields_.begin(), fields_.end());
   }
-  llvm::Type *codegen() override;
+  llvm::Type *codegen(string const &parentName) override;
   void print(int n) override;
 };
 
 class ArrayType : public Type {
-  string name_;
+  unique_ptr<Type> type_;
 
  protected:
-  llvm::Type *codegen(string const &parentName) override;
 
  public:
-  ArrayType(string name) : name_(move(name)) {}
-  llvm::Type *codegen() override;
+  ArrayType(unique_ptr<Type> name) : type_(move(name)) {}
+  llvm::Type *codegen(string const &parentName) override;
   void print(int n) override;
 };
 

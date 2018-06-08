@@ -190,8 +190,9 @@ void FunctionDec::print(int n) {
 
 void VarDec::print(int n) {
   blank(n);
-  cout << "VarDec" << endl;
-  type_->print(n + 1);
+  cout << "VarDec"
+       << " [ name: " << name_ << " ]" << endl;
+  if (type_) type_->print(n + 1);
   init_->print(n + 1);
 }
 
@@ -217,6 +218,6 @@ void RecordType::print(int n) {
 
 void ArrayType::print(int n) {
   blank(n);
-  cout << "ArrayType"
-       << " [ name: " << name_ << " ]" << endl;
+  cout << "ArrayType" << endl;
+  type_->print(n + 1);
 }
