@@ -25,6 +25,8 @@ class Node {
   virtual void print(int n) = 0;
 };
 
+void print(std::unique_ptr<Node> &root);
+
 class Var : public Node {
  public:
   void print(int n) override;

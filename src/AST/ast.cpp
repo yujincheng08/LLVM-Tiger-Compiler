@@ -40,29 +40,29 @@ void Type::print(int n) {
 
 void SimpleVar::print(int n) {
   blank(n);
-  printf("SimpleVar");
+  printf("SimpleVar:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 }
 
 void FieldVar::print(int n) {
   blank(n);
-  printf("FieldVar");
+  printf("FieldVar:");
   line();
 
   var_->print(n + 1);
 
   blank(n + 1);
-  printf("field_:%s", field_.c_str());
+  printf("field: %s", field_.c_str());
   line();
 }
 
 void SubscriptVar::print(int n) {
   blank(n);
-  printf("SubscriptVar");
+  printf("SubscriptVar:");
   line();
   var_->print(n + 1);
   exp_->print(n + 1);
@@ -70,7 +70,7 @@ void SubscriptVar::print(int n) {
 
 void VarExp::print(int n) {
   blank(n);
-  printf("VarExp");
+  printf("VarExp:");
   line();
   var_->print(n + 1);
 }
@@ -83,31 +83,31 @@ void NilExp::print(int n) {
 
 void IntExp::print(int n) {
   blank(n);
-  printf("IntExp");
+  printf("IntExp:");
   line();
 
   blank(n + 1);
-  printf("val_:%d", val_);
+  printf("val: %d", val_);
   line();
 }
 
 void StringExp::print(int n) {
   blank(n);
-  printf("StringExp");
+  printf("StringExp:");
   line();
 
   blank(n + 1);
-  printf("val_:%s", val_.c_str());
+  printf("val: %s", val_.c_str());
   line();
 }
 
 void CallExp::print(int n) {
   blank(n);
-  printf("CallExp");
+  printf("CallExp:");
   line();
 
   blank(n + 1);
-  printf("func_:%s", func_.c_str());
+  printf("func: %s", func_.c_str());
   line();
 
   for (auto &arg : args_) {
@@ -117,11 +117,11 @@ void CallExp::print(int n) {
 
 void BinaryExp::print(int n) {
   blank(n);
-  printf("BinaryExp");
+  printf("BinaryExp:");
   line();
 
   blank(n + 1);
-  printf("op_:%c", op_);
+  printf("op: '%c'", op_);
   line();
 
   left_->print(n + 1);
@@ -130,11 +130,11 @@ void BinaryExp::print(int n) {
 
 void Field::print(int n) {
   blank(n);
-  printf("Field");
+  printf("Field:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 
   type_->print(n + 1);
@@ -142,11 +142,11 @@ void Field::print(int n) {
 
 void FieldExp::print(int n) {
   blank(n);
-  printf("FieldExp");
+  printf("FieldExp:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 
   exp_->print(n + 1);
@@ -154,11 +154,11 @@ void FieldExp::print(int n) {
 
 void RecordExp::print(int n) {
   blank(n);
-  printf("RecordExp");
+  printf("RecordExp:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 
   for (auto &fieldExp : fieldExps_) {
@@ -168,7 +168,7 @@ void RecordExp::print(int n) {
 
 void SequenceExp::print(int n) {
   blank(n);
-  printf("SequenceExp");
+  printf("SequenceExp:");
   line();
 
   for (auto &exp : exps_) {
@@ -178,7 +178,7 @@ void SequenceExp::print(int n) {
 
 void AssignExp::print(int n) {
   blank(n);
-  printf("AssignExp");
+  printf("AssignExp:");
   line();
 
   var_->print(n + 1);
@@ -187,7 +187,7 @@ void AssignExp::print(int n) {
 
 void IfExp::print(int n) {
   blank(n);
-  printf("IfExp");
+  printf("IfExp:");
   line();
 
   test_->print(n + 1);
@@ -197,7 +197,7 @@ void IfExp::print(int n) {
 
 void WhileExp::print(int n) {
   blank(n);
-  printf("WhileExp");
+  printf("WhileExp:");
   line();
 
   test_->print(n + 1);
@@ -206,11 +206,11 @@ void WhileExp::print(int n) {
 
 void ForExp::print(int n) {
   blank(n);
-  printf("ForExp");
+  printf("ForExp:");
   line();
 
   blank(n + 1);
-  printf("var_:%s", var_.c_str());
+  printf("var: %s", var_.c_str());
   line();
 
   low_->print(n + 1);
@@ -220,13 +220,13 @@ void ForExp::print(int n) {
 
 void BreakExp::print(int n) {
   blank(n);
-  printf("Break");
+  printf("Break:");
   line();
 }
 
 void LetExp::print(int n) {
   blank(n);
-  printf("LetExp");
+  printf("LetExp:");
   line();
   for (auto &dec : decs_) {
     dec->print(n + 1);
@@ -236,11 +236,11 @@ void LetExp::print(int n) {
 
 void ArrayExp::print(int n) {
   blank(n);
-  printf("ArrayExp");
+  printf("ArrayExp:");
   line();
 
   blank(n + 1);
-  printf("type_:%s", type_.c_str());
+  printf("type: %s", type_.c_str());
   line();
 
   size_->print(n + 1);
@@ -249,28 +249,28 @@ void ArrayExp::print(int n) {
 
 void Prototype::print(int n) {
   blank(n);
-  printf("Prototype");
+  printf("Prototype:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 
   for (auto &param : params_) {
     param->print(n + 1);
   }
   blank(n + 1);
-  printf("result_:%s", result_.c_str());
+  printf("result: %s", result_.c_str());
   line();
 }
 
 void FunctionDec::print(int n) {
   blank(n);
-  printf("FunctionDec");
+  printf("FunctionDec:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 
   proto_->print(n + 1);
@@ -279,11 +279,11 @@ void FunctionDec::print(int n) {
 
 void VarDec::print(int n) {
   blank(n);
-  printf("VarDec");
+  printf("VarDec:");
   line();
 
   blank(n + 1);
-  printf("type_:%s", type_.c_str());
+  printf("type: %s", type_.c_str());
   line();
 
   init_->print(n + 1);
@@ -291,7 +291,7 @@ void VarDec::print(int n) {
 
 void TypeDec::print(int n) {
   blank(n);
-  printf("TypeDec");
+  printf("TypeDec:");
   line();
 
   type_->print(n + 1);
@@ -299,17 +299,17 @@ void TypeDec::print(int n) {
 
 void NameType::print(int n) {
   blank(n);
-  printf("NameType");
+  printf("NameType:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
 }
 
 void RecordType::print(int n) {
   blank(n);
-  printf("RecordType");
+  printf("RecordType:");
   line();
   for (auto &field : fields_) {
     field->print(n + 1);
@@ -318,10 +318,16 @@ void RecordType::print(int n) {
 
 void ArrayType::print(int n) {
   blank(n);
-  printf("ArrayType");
+  printf("ArrayType:");
   line();
 
   blank(n + 1);
-  printf("name_:%s", name_.c_str());
+  printf("name: %s", name_.c_str());
   line();
+}
+
+void AST::print(std::unique_ptr<Node> &root) {
+  printf("AST_begin\n");
+  root->print(0);
+  printf("AST_end\n");
 }

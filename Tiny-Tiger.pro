@@ -42,7 +42,7 @@ INCLUDEPATH += \
 
 SOURCES += \
     src/main.cpp \
-    src/mainwindow.cpp \
+#    src/mainwindow.cpp \
 #    src/util.c \
 #    src/table.c \
 #    src/symbol.c \

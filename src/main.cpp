@@ -1,6 +1,5 @@
 #include <AST/ast.h>
 #include <QApplication>
-#include "mainwindow.h"
 
 extern int tigerparse();
 extern std::unique_ptr<AST::Node> root;
@@ -10,7 +9,8 @@ int main(int argc, char *argv[]) {
   // MainWindow w;
   // w.show();
   tigerparse();
-  root->print(0);
+
+  AST::print(root);
 
   root->codegen();
   // return a.exec();
