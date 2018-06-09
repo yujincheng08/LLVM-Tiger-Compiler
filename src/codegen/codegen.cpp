@@ -371,7 +371,7 @@ llvm::Value *AST::IfExp::codegen() {
   if (thenBB->getType() != elseBB->getType())
     return logErrorV("Require same type in both branch");
 
-  auto PN = builder.CreatePHI(thenBB->getType(), 2, "iftmp");
+  auto PN = builder.CreatePHI(then->getType(), 2, "iftmp");
   PN->addIncoming(then, thenBB);
   PN->addIncoming(elsee, elseBB);
 
