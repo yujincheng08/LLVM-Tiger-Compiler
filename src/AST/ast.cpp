@@ -59,24 +59,22 @@ llvm::Type *AST::FieldVar::traverse(vector<std::string> &variableTable,
   //
   auto var = var_->traverse(variableTable, context);
   if (!var) return nullptr;
-  if (!var->isPointerTy() || !context.getElementType(var)->isPointerTy() ||
-      !context.getElementType(context.getElementType(var))->isStructTy())
+  if (!context.isRecord(var))
     return context.logErrorT("field reference is only for struct type.");
-  auto type = context.getElementType(var);
   llvm::StructType *eleType =
-      llvm::cast<llvm::StructType>(context.getElementType(type));
+      llvm::cast<llvm::StructType>(context.getElementType(var));
 
   auto typeDec =
       dynamic_cast<RecordType *>(context.typeDecs[eleType->getStructName()]);
   assert(typeDec);
   idx_ = 0u;
   for (auto &field : typeDec->fields_)
-    if (field->name_ == field_)
+    if (field->getName() == field_)
       break;
     else
       ++idx_;
-  type_ = typeDec->fields_[idx_]->type_;
-  return llvm::PointerType::getUnqual(type_);
+  type_ = typeDec->fields_[idx_]->getType();
+  return type_;
 }
 
 void SubscriptVar::print(QTreeWidgetItem *parent, int n) {
@@ -174,9 +172,19 @@ void CallExp::print(QTreeWidgetItem *parent, int n) {
 
 llvm::Type *CallExp::traverse(vector<string> &variableTable,
                               CodeGenContext &context) {
+  auto functionDec = context.functionDecs[func_];
+  if (!functionDec) return context.logErrorT("Function undeclared");
+  auto params = functionDec->params();
+  if (args_.size() != params.size())
+    return context.logErrorT("Incorrect # arguments passed");
+
+  size_t i = 0u;
   for (auto &exp : args_) {
-    exp->traverse(variableTable, context);
+    auto type = exp->traverse(variableTable, context);
+    auto arg = params[i++];
+    if (arg != type) return context.logErrorT("Params type not match");
   }
+  return functionDec->getReturnType();
 }
 
 void BinaryExp::print(QTreeWidgetItem *parent, int n) {
@@ -264,12 +272,12 @@ llvm::Type *RecordExp::traverse(vector<string> &variableTable,
   size_t idx = 0u;
   for (auto &fieldDec : typeDec->fields_) {
     auto &field = fieldExps_[idx];
-    if (field->getName() != fieldDec->name_)
+    if (field->getName() != fieldDec->getName())
       return context.logErrorT(
           field->getName() +
           " is not a field or not on the right position of " + typeName_);
     auto exp = field->traverse(variableTable, context);
-    if (exp != fieldDec->type_)
+    if (exp != fieldDec->getType())
       return context.logErrorT("Field type not match");
     ++idx;
   }
@@ -308,8 +316,17 @@ void AssignExp::print(QTreeWidgetItem *parent, int n) {
 llvm::Type *AssignExp::traverse(vector<string> &variableTable,
                                 CodeGenContext &context) {
   auto var = var_->traverse(variableTable, context);
+  if (!var) return nullptr;
   auto exp = exp_->traverse(variableTable, context);
-  if (var != exp) return context.logErrorT("Assign types do not match");
+  if (!exp) return nullptr;
+  if (var->isPointerTy() && context.getElementType(var)->isStructTy() &&
+      exp->isPointerTy() && context.getElementType(exp)->isStructTy()) {
+    if (!llvm::cast<llvm::StructType>(context.getElementType(var))
+             ->isLayoutIdentical(
+                 llvm::cast<llvm::StructType>(context.getElementType(exp))))
+      return context.logErrorT("Two record are not identical");
+  } else if (var != exp)
+    return context.logErrorT("Assign types do not match");
   // TODO: check type
   return exp;
 }
@@ -327,11 +344,19 @@ void IfExp::print(QTreeWidgetItem *parent, int n) {
 llvm::Type *IfExp::traverse(vector<string> &variableTable,
                             CodeGenContext &context) {
   auto test = test_->traverse(variableTable, context);
+  if (!test) return nullptr;
   auto then = then_->traverse(variableTable, context);
-  auto elsee = else_->traverse(variableTable, context);
+  if (!then) return nullptr;
   if (!test->isIntegerTy()) return context.logErrorT("Require integer in test");
-  if (then != elsee)
-    return context.logErrorT("Require same type in both branch");
+  if (else_) {
+    auto elsee = else_->traverse(variableTable, context);
+    if (!elsee) return nullptr;
+    if (then != elsee)
+      return context.logErrorT("Require same type in both branch");
+  } else {
+    if (!then->isVoidTy())
+      return context.logErrorT("One branch if should be void");
+  }
   return then;
 }
 
@@ -347,6 +372,7 @@ void WhileExp::print(QTreeWidgetItem *parent, int n) {
 llvm::Type *WhileExp::traverse(vector<string> &variableTable,
                                CodeGenContext &context) {
   auto test = test_->traverse(variableTable, context);
+  if (!test) return nullptr;
   if (!test->isIntegerTy()) return context.logErrorT("Rquire integer");
   body_->traverse(variableTable, context);
   return context.voidType;
@@ -369,8 +395,11 @@ void ForExp::print(QTreeWidgetItem *parent, int n) {
 llvm::Type *ForExp::traverse(vector<string> &variableTable,
                              CodeGenContext &context) {
   auto low = low_->traverse(variableTable, context);
+  if (!low) return nullptr;
   auto high = high_->traverse(variableTable, context);
+  if (!high) return nullptr;
   auto body = body_->traverse(variableTable, context);
+  if (!body) return nullptr;
   if (!low->isIntegerTy() || !high->isIntegerTy())
     return context.logErrorT("For bounds require integer");
   if (!body->isVoidTy()) return context.logErrorT("Loop body should be void");
@@ -466,17 +495,21 @@ void Prototype::print(QTreeWidgetItem *parent, int n) {
   }
 }
 
-llvm::Type *Prototype::traverse(vector<string> &variableTable,
-                                CodeGenContext &context) {
+llvm::FunctionType *Prototype::traverse(vector<string> &variableTable,
+                                        CodeGenContext &context) {
+  std::vector<llvm::Type *> args;
+
   for (auto &field : params_) {
-    field->traverse(variableTable, context);
+    args.push_back(field->traverse(variableTable, context));
+    if (!args.back()) return nullptr;
   }
   if (result_.empty()) {
     resultType_ = llvm::Type::getVoidTy(context.context);
   } else {
     resultType_ = context.typeOf(result_);
   }
-  return resultType_;
+  if (!resultType_) return nullptr;
+  return llvm::FunctionType::get(resultType_, args, false);
 }
 
 void FunctionDec::print(QTreeWidgetItem *parent, int n) {
@@ -496,10 +529,12 @@ llvm::Type *FunctionDec::traverse(vector<string> &, CodeGenContext &context) {
   if (context.functionDecs.lookupOne(name_))
     return context.logErrorT("Function " + name_ +
                              " is already defined in same scope.");
-  context.functionDecs.push(name_, this);
   context.valueDecs.enter();
   auto proto = proto_->traverse(variableTable_, context);
+  if (!proto) return nullptr;
+  context.functionDecs.push(name_, proto);
   auto body = body_->traverse(variableTable_, context);
+  if (!body) return nullptr;
   context.valueDecs.exit();
   context.functionDecs.popOne(name_);
   if (!proto->isVoidTy() && proto != body)
@@ -523,8 +558,13 @@ llvm::Type *VarDec::traverse(vector<string> &variableTable,
     type_ = init;
   } else {
     type_ = context.typeOf(typeName_);
-    if (init != type_) return context.logErrorT("Declare type not match");
+    if (context.isNil(init)) {
+      if (!context.isRecord(type_))
+        return context.logErrorT("Nil is only for record");
+    } else if (init != type_)
+      return context.logErrorT("Declare type not match");
   }
+  if (!type_) return nullptr;
   context.valueDecs.push(name_, this);
   return context.voidType;
 }
@@ -578,8 +618,8 @@ void ArrayType::print(QTreeWidgetItem *parent, int n) {
   // type_->print(cur, n + 1);
 }
 
-llvm::Type *AST::ArrayType::codegen(std::set<std::string> &parentName,
-                                    CodeGenContext &context) {
+llvm::Type *AST::ArrayType::traverse(std::set<std::string> &parentName,
+                                     CodeGenContext &context) {
   if (context.types[name_]) return context.types[name_];
   if (parentName.find(name_) != parentName.end())
     return context.logErrorT(name_ + " has an endless loop of type define");
@@ -592,8 +632,8 @@ llvm::Type *AST::ArrayType::codegen(std::set<std::string> &parentName,
   return type;
 }
 
-llvm::Type *AST::NameType::codegen(std::set<std::string> &parentName,
-                                   CodeGenContext &context) {
+llvm::Type *AST::NameType::traverse(std::set<std::string> &parentName,
+                                    CodeGenContext &context) {
   if (auto type = context.types[name_]) return type;
   if (auto type = context.types[type_]) {
     context.types.push(name_, type);
@@ -607,8 +647,8 @@ llvm::Type *AST::NameType::codegen(std::set<std::string> &parentName,
   return type;
 }
 
-llvm::Type *AST::RecordType::codegen(std::set<std::string> &parentName,
-                                     CodeGenContext &context) {
+llvm::Type *AST::RecordType::traverse(std::set<std::string> &parentName,
+                                      CodeGenContext &context) {
   if (context.types[name_]) return context.types[name_];
   std::vector<llvm::Type *> types;
   if (parentName.find(name_) != parentName.end()) {
@@ -621,6 +661,7 @@ llvm::Type *AST::RecordType::codegen(std::set<std::string> &parentName,
   for (auto &field : fields_) {
     auto type = context.typeOf(field->typeName_, parentName);
     if (!type) return nullptr;
+    field->type_ = type;
     types.push_back(type);
   }
   parentName.erase(name_);

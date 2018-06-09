@@ -48,7 +48,8 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
       llvm::Function::Create(mainProto, llvm::GlobalValue::ExternalLinkage,
                              "main", context.module.get());
   auto block = llvm::BasicBlock::Create(context.context, "entry", mainFunction);
-
+  context.types["int"] = context.intType;
+  context.types["string"] = context.stringType;
   context.intrinsic();
   traverse(mainVariableTable_, context);
   context.builder.SetInsertPoint(block);
@@ -253,11 +254,16 @@ llvm::Value *AST::IfExp::codegen(CodeGenContext &context) {
   function->getBasicBlockList().push_back(mergeBB);
   context.builder.SetInsertPoint(mergeBB);
 
-  auto PN = context.builder.CreatePHI(then->getType(), 2, "iftmp");
-  PN->addIncoming(then, thenBB);
-  PN->addIncoming(elsee, elseBB);
+  if (else_) {
+    auto PN = context.builder.CreatePHI(then->getType(), 2, "iftmp");
+    PN->addIncoming(then, thenBB);
+    PN->addIncoming(elsee, elseBB);
 
-  return PN;
+    return PN;
+  } else {
+    return llvm::Constant::getNullValue(
+        llvm::Type::getInt64Ty(context.context));
+  }
 }
 
 llvm::Value *AST::WhileExp::codegen(CodeGenContext &context) {
@@ -312,9 +318,6 @@ llvm::Value *AST::CallExp::codegen(CodeGenContext &context) {
   if (!callee) return context.logErrorV("Unknown function referenced");
 
   // If argument mismatch error.
-  if (callee->arg_size() != args_.size())
-    return context.logErrorV("Incorrect # arguments passed");
-
   std::vector<llvm::Value *> args;
   for (size_t i = 0u; i != args_.size(); ++i) {
     args.push_back(args_[i]->codegen(context));
@@ -325,11 +328,6 @@ llvm::Value *AST::CallExp::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::ArrayExp::codegen(CodeGenContext &context) {
-  static auto allocaArrayFunction = context.createIntrinsicFunction(
-      "allocaArray",
-      {llvm::Type::getInt64Ty(context.context),
-       llvm::Type::getInt64Ty(context.context)},
-      llvm::Type::getInt8PtrTy(context.context));
   auto function = context.builder.GetInsertBlock()->getParent();
   // if (!type_->isPointerTy()) return context.logErrorV("Array type required");
   auto eleType = context.getElementType(type_);
@@ -337,7 +335,7 @@ llvm::Value *AST::ArrayExp::codegen(CodeGenContext &context) {
   auto init = init_->codegen(context);
   auto eleSize = context.module->getDataLayout().getTypeAllocSize(eleType);
   llvm::Value *arrayPtr = context.builder.CreateCall(
-      allocaArrayFunction,
+      context.allocaArrayFunction,
       std::vector<llvm::Value *>{
           size, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
                                        llvm::APInt(64, eleSize))},
@@ -421,24 +419,20 @@ llvm::Value *AST::FieldExp::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::RecordExp::codegen(CodeGenContext &context) {
-  static auto allocaRecordFunction = context.createIntrinsicFunction(
-      "allocaRecord", {llvm::Type::getInt64Ty(context.context)},
-      llvm::Type::getInt8PtrTy(context.context));
   context.builder.GetInsertBlock()->getParent();
   if (!type_) return nullptr;
   // auto var = createEntryBlockAlloca(function, type, "record");
   auto eleType = context.getElementType(type_);
   auto size = context.module->getDataLayout().getTypeAllocSize(eleType);
   llvm::Value *var = context.builder.CreateCall(
-      allocaRecordFunction,
-      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
-                             llvm::APInt(64, size)),
-      "alloca");
+      context.allocaRecordFunction,
+      llvm::ConstantInt::get(context.intType, llvm::APInt(64, size)), "alloca");
   var = context.builder.CreateBitCast(var, type_, "record");
   size_t idx = 0u;
   for (auto &field : fieldExps_) {
     auto exp = field->codegen(context);
     if (!exp) return nullptr;
+    if (!field->type_) return nullptr;
     auto elementPtr = context.builder.CreateGEP(
         field->type_, var,
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
@@ -458,7 +452,7 @@ llvm::Value *AST::StringExp::codegen(CodeGenContext &context) {
 llvm::Function *AST::Prototype::codegen(CodeGenContext &context) {
   std::vector<llvm::Type *> args;
   for (auto &arg : params_) {
-    auto argType = arg->type_;
+    auto argType = arg->getType();
     if (!argType) return nullptr;
     args.push_back(argType);
   }
@@ -474,7 +468,7 @@ llvm::Function *AST::Prototype::codegen(CodeGenContext &context) {
                              name_, context.module.get());
 
   size_t idx = 0u;
-  for (auto &arg : function->args()) arg.setName(params_[idx++]->name_);
+  for (auto &arg : function->args()) arg.setName(params_[idx++]->getName());
   return function;
 }
 

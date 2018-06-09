@@ -39,7 +39,7 @@ class CodeGenContext {
   SymbolTable<llvm::Type> types;
   SymbolTable<AST::Type> typeDecs;
   SymbolTable<llvm::Function> functions;
-  SymbolTable<AST::FunctionDec> functionDecs;
+  SymbolTable<llvm::FunctionType> functionDecs;
 
   llvm::Type *intType{llvm::Type::getInt64Ty(context)};
   llvm::Type *voidType{llvm::Type::getVoidTy(context)};
@@ -48,7 +48,13 @@ class CodeGenContext {
   llvm::Type *nilType{
       llvm::PointerType::getUnqual(llvm::StructType::get(context))};
   // llvm::Type *stringType{llvm::Type::getInt64Ty(context)};
-
+  llvm::Function *allocaArrayFunction{createIntrinsicFunction(
+      "allocaArray",
+      {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context)},
+      llvm::Type::getInt8PtrTy(context))};
+  llvm::Function *allocaRecordFunction = {
+      createIntrinsicFunction("allocaRecord", {llvm::Type::getInt64Ty(context)},
+                              llvm::Type::getInt8PtrTy(context))};
   std::stack<
       std::tuple<llvm::BasicBlock * /*next*/, llvm::BasicBlock * /*after*/>>
       loopStack;
@@ -62,7 +68,8 @@ class CodeGenContext {
 
   llvm::Type *getElementType(llvm::Type *type);
 
-  bool isNil(llvm::Value *exp);
+  bool isNil(llvm::Type *exp);
+  bool isRecord(llvm::Type *exp);
   llvm::Value *checkStore(llvm::Value *val, llvm::Value *ptr);
   llvm::Function *createIntrinsicFunction(std::string const &name,
                                           std::vector<llvm::Type *> const &args,
