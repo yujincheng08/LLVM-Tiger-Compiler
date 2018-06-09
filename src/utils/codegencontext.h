@@ -70,6 +70,7 @@ class CodeGenContext {
 
   bool isNil(llvm::Type *exp);
   bool isRecord(llvm::Type *exp);
+  bool isMatch(llvm::Type *a, llvm::Type *b);
   llvm::Value *checkStore(llvm::Value *val, llvm::Value *ptr);
   llvm::Function *createIntrinsicFunction(std::string const &name,
                                           std::vector<llvm::Type *> const &args,

@@ -66,6 +66,27 @@ bool CodeGenContext::isRecord(llvm::Type *exp) {
   return exp->isPointerTy() && getElementType(exp)->isStructTy();
 }
 
+bool CodeGenContext::isMatch(llvm::Type *a, llvm::Type *b) {
+  if (a == b) return true;
+  if (!a || !b) return false;
+  if (isNil(a)) {
+    if (isRecord(b))
+      return true;
+    else
+      return false;
+  }
+  if (isNil(b)) {
+    if (isRecord(a))
+      return true;
+    else
+      return false;
+  }
+  if (isRecord(a) && isRecord(b))
+    return llvm::cast<llvm::StructType>(getElementType(a))
+        ->isLayoutIdentical(llvm::cast<llvm::StructType>(getElementType(b)));
+  return false;
+}
+
 llvm::Type *CodeGenContext::logErrorT(std::string const &msg) {
   std::cerr << msg << std::endl;
   return nullptr;

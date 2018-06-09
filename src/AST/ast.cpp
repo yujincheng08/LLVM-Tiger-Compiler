@@ -277,7 +277,7 @@ llvm::Type *RecordExp::traverse(vector<string> &variableTable,
           field->getName() +
           " is not a field or not on the right position of " + typeName_);
     auto exp = field->traverse(variableTable, context);
-    if (exp != fieldDec->getType())
+    if (!context.isMatch(exp, fieldDec->getType()))
       return context.logErrorT("Field type not match");
     ++idx;
   }
@@ -319,16 +319,10 @@ llvm::Type *AssignExp::traverse(vector<string> &variableTable,
   if (!var) return nullptr;
   auto exp = exp_->traverse(variableTable, context);
   if (!exp) return nullptr;
-  if (var->isPointerTy() && context.getElementType(var)->isStructTy() &&
-      exp->isPointerTy() && context.getElementType(exp)->isStructTy()) {
-    if (!llvm::cast<llvm::StructType>(context.getElementType(var))
-             ->isLayoutIdentical(
-                 llvm::cast<llvm::StructType>(context.getElementType(exp))))
-      return context.logErrorT("Two record are not identical");
-  } else if (var != exp)
+  if (context.isMatch(var, exp))
+    return exp;
+  else
     return context.logErrorT("Assign types do not match");
-  // TODO: check type
-  return exp;
 }
 
 void IfExp::print(QTreeWidgetItem *parent, int n) {
@@ -558,11 +552,8 @@ llvm::Type *VarDec::traverse(vector<string> &variableTable,
     type_ = init;
   } else {
     type_ = context.typeOf(typeName_);
-    if (context.isNil(init)) {
-      if (!context.isRecord(type_))
-        return context.logErrorT("Nil is only for record");
-    } else if (init != type_)
-      return context.logErrorT("Declare type not match");
+    if (!context.isMatch(type_, init))
+      return context.logErrorT("Type not match");
   }
   if (!type_) return nullptr;
   context.valueDecs.push(name_, this);
