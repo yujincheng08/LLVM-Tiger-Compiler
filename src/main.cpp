@@ -1,26 +1,18 @@
-#include "mainwindow.h"
-#include <AST/ast.h>
 #include <QApplication>
-#include <iostream>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/TargetSelect.h>
-
-extern int tigerparse();
-extern std::unique_ptr<AST::Root> root;
+#include "IDE/mainwindow.h"
 
 int main(int argc, char *argv[]) {
-  // QApplication a(argc, argv);
-  // MainWindow w;
-  // w.show();
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
-  llvm::InitializeNativeTargetAsmParser();
+  QApplication a(argc, argv);
 
-  tigerparse();
-  if(root){
-        root->print(0);
-        root->codegen();
-  }
-  // return a.exec();
+  //引入样式表
+  QFile qss(":/style.qss");  //用相对路径
+  qss.open(QFile::ReadOnly);
+  qApp->setStyleSheet(qss.readAll());
+  qss.close();
+
+  MainWindow w;
+  w.show();
+
+  return a.exec();
   return 0;
 }
