@@ -21,6 +21,7 @@ class SymbolTable {
   void popOne(std::string const &name);
   void enter();
   void exit();
+  void reset();
 };
 
 template <typename T>
@@ -51,9 +52,8 @@ T *&SymbolTable<T>::lookupOne(const std::string &name) {
   return stack_.front()[name];
 }
 
-template<typename T>
-void SymbolTable<T>::push(const std::string &name, T *const val)
-{
+template <typename T>
+void SymbolTable<T>::push(const std::string &name, T *const val) {
   stack_.front()[name] = val;
 }
 
@@ -70,6 +70,12 @@ void SymbolTable<T>::enter() {
 template <typename T>
 void SymbolTable<T>::exit() {
   stack_.pop_front();
+}
+
+template <typename T>
+void SymbolTable<T>::reset() {
+  stack_.clear();
+  enter();
 }
 
 #endif  // SYMBOLTABLE_H

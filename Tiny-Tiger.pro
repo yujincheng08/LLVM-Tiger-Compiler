@@ -56,7 +56,8 @@ SOURCES += \
     src/AST/ast.cpp \
     src/codegen/codegen.cpp \
     src/utils/symboltable.cpp \
-    src/utils/runtime.cpp
+    src/utils/runtime.cpp \
+    src/utils/codegencontext.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -74,7 +75,8 @@ HEADERS += \
 #    src/translate.h \
 #    src/frame.h \
     src/AST/ast.h \
-    src/utils/symboltable.h
+    src/utils/symboltable.h \
+    src/utils/codegencontext.h
 
 OTHER_FILES += \
     src/tiger.l \
