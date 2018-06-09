@@ -180,7 +180,7 @@ id:               ID								{$$=$1;}
                 //| fundec fundecs					{$$=A_FunctionDec(EM_tokPos, A_FundecList($1, $2->u.function));}
                 //;
 
-fundec:           FUNCTION id LPAREN tyfields RPAREN EQ exp				{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), "nil"), std::unique_ptr<Exp>($7)); delete $2;}
+fundec:           FUNCTION id LPAREN tyfields RPAREN EQ exp				{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), ""), std::unique_ptr<Exp>($7)); delete $2;}
                 | FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp	{$$=new FunctionDec(*$2, llvm::make_unique<Prototype>(*$2, std::move(*$4), *$7), std::unique_ptr<Exp>($9)); delete $2;}
                 ;
 

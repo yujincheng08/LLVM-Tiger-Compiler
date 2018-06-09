@@ -8,7 +8,14 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
+
 #include <iostream>
 #include <stack>
 #include <tuple>
@@ -82,10 +89,71 @@ static llvm::Type *typeOf(const std::string &name) {
   return typeOf(name, parentName);
 }
 
+static llvm::Function *createIntrinsicFunction(
+    std::string const &name, std::vector<llvm::Type *> const &args,
+    llvm::Type *retType) {
+  auto functionType = llvm::FunctionType::get(retType, args, false);
+  auto function = llvm::Function::Create(
+      functionType, llvm::Function::ExternalLinkage, name, module.get());
+  return function;
+}
+
+static void intrinsic() {
+  auto stringType = types["string"];
+  auto intType = types["int"];
+  auto voidType = llvm::Type::getVoidTy(context);
+  functions["print"] = createIntrinsicFunction("print", {stringType}, voidType);
+  functions["printd"] = createIntrinsicFunction("printd", {intType}, voidType);
+  functions["flush"] = createIntrinsicFunction("flush", {}, voidType);
+  functions["getchar"] = createIntrinsicFunction("getchar_", {}, stringType);
+  functions["ord"] = createIntrinsicFunction("ord", {stringType}, intType);
+  functions["chr"] = createIntrinsicFunction("chr", {intType}, stringType);
+  functions["size"] = createIntrinsicFunction("size", {stringType}, intType);
+  functions["substring"] = createIntrinsicFunction(
+      "substring", {stringType, intType, intType}, stringType);
+  functions["concat"] =
+      createIntrinsicFunction("concat", {stringType, stringType}, stringType);
+  functions["not"] = createIntrinsicFunction("not_", {intType}, intType);
+  functions["exit"] = createIntrinsicFunction("exit_", {intType}, voidType);
+}
+
 llvm::Value *AST::Root::codegen() {
   module = llvm::make_unique<llvm::Module>("main", context);
+
+  llvm::legacy::PassManager pm;
+  pm.add(llvm::createPrintModulePass(llvm::outs()));
+
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmParsers();
+  llvm::InitializeAllAsmPrinters();
+
+  auto targetTriple = llvm::sys::getDefaultTargetTriple();
+  module->setTargetTriple(targetTriple);
+
+  std::string error;
+  auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+
+  // Print an error and exit if we couldn't find the requested target.
+  // This generally occurs if we've forgotten to initialise the
+  // TargetRegistry or we have a bogus target triple.
+  if (!target) {
+    llvm::errs() << error;
+    return nullptr;
+  }
+
+  auto CPU = "generic";
+  auto features = "";
+
+  llvm::TargetOptions opt;
+  auto RM = llvm::Optional<llvm::Reloc::Model>();
+  auto targetMachine =
+      target->createTargetMachine(targetTriple, CPU, features, opt, RM);
+
+  module->setDataLayout(targetMachine->createDataLayout());
   std::vector<llvm::Type *> args;
-  auto mainProto = llvm::FunctionType::get(llvm::Type::getVoidTy(context),
+  auto mainProto = llvm::FunctionType::get(llvm::Type::getInt64Ty(context),
                                            llvm::makeArrayRef(args), false);
   auto mainFunction = llvm::Function::Create(
       mainProto, llvm::GlobalValue::ExternalLinkage, "main", module.get());
@@ -94,14 +162,37 @@ llvm::Value *AST::Root::codegen() {
   types["int"] = llvm::Type::getInt64Ty(context);
   types["string"] =
       llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(context));
+  intrinsic();
   builder.SetInsertPoint(block);
   root_->codegen();
+  builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+                                           llvm::APInt(64, 0)));
   // llvm::ReturnInst::Create(context, block);
   std::cout << "Code is generated." << std::endl;
-  llvm::legacy::PassManager pm;
-  pm.add(llvm::createPrintModulePass(llvm::outs()));
-  pm.run(*module);
+
+  auto filename = "output.o";
+  std::error_code EC;
+  llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::F_None);
+
+  if (EC) {
+    llvm::errs() << "Could not open file: " << EC.message();
+    return nullptr;
+  }
+
+  // llvm::legacy::PassManager pass;
+  auto fileType = llvm::TargetMachine::CGFT_ObjectFile;
+
   std::cout << "done." << std::endl;
+  if (targetMachine->addPassesToEmitFile(pm, dest, fileType)) {
+    llvm::errs() << "TheTargetMachine can't emit a file of this type";
+    return nullptr;
+  }
+
+  pm.run(*module);
+  // pass.run(*module);
+  dest.flush();
+
+  llvm::outs() << "Wrote " << filename << "\n";
   return nullptr;
 }
 
@@ -155,7 +246,8 @@ llvm::Value *AST::ForExp::codegen() {
 
   builder.SetInsertPoint(testBB);
 
-  auto EndCond = builder.CreateICmpSLE(variable, high, "loopcond");
+  auto EndCond = builder.CreateICmpSLE(builder.CreateLoad(variable, var_), high,
+                                       "loopcond");
   // auto loopEndBB = builder.GetInsertBlock();
 
   // goto after or loop
@@ -179,7 +271,7 @@ llvm::Value *AST::ForExp::codegen() {
   builder.SetInsertPoint(nextBB);
 
   auto nextVar = builder.CreateAdd(
-      builder.CreateLoad(variable),
+      builder.CreateLoad(variable, var_),
       llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
   builder.CreateStore(nextVar, variable);
 
@@ -235,7 +327,8 @@ llvm::Value *AST::AssignExp::codegen() {
   auto var = var_->codegen();
   if (!var) return nullptr;
   auto exp = exp_->codegen();
-  if (!exp) return nullptr;  checkStore(exp, var);
+  if (!exp) return nullptr;
+  checkStore(exp, var);
   return exp;  // var is a pointer, should not return
 }
 
@@ -350,20 +443,34 @@ llvm::Value *AST::CallExp::codegen() {
 }
 
 llvm::Value *AST::ArrayExp::codegen() {
+  static auto allocaArrayFunction = createIntrinsicFunction(
+      "allocaArray",
+      {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context)},
+      llvm::Type::getInt8PtrTy(context));
   auto function = builder.GetInsertBlock()->getParent();
   auto type = typeOf(type_);
   if (!type->isPointerTy()) return logErrorV("Array type required");
   auto eleType = getElementType(type);
   auto size = size_->codegen();
   auto init = init_->codegen();
-  auto arrayPtr = createEntryBlockAlloca(function, eleType, "arrayPtr", size);
+  auto eleSize = module->getDataLayout().getTypeAllocSize(eleType);
+  llvm::Value *arrayPtr = builder.CreateCall(
+      allocaArrayFunction,
+      std::vector<llvm::Value *>{
+          size, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+                                       llvm::APInt(64, eleSize))},
+      "alloca");
+  arrayPtr = builder.CreateBitCast(arrayPtr, type, "array");
+
+  // auto arrayPtr = createEntryBlockAlloca(function, eleType, "arrayPtr",
+  // size);
   auto zero = llvm::ConstantInt::get(context, llvm::APInt(64, 0, true));
 
   std::string indexName = "index";
-  auto index = createEntryBlockAlloca(function, llvm::Type::getInt64Ty(context),
-                                      indexName);
+  auto indexPtr = createEntryBlockAlloca(
+      function, llvm::Type::getInt64Ty(context), indexName);
   // before loop:
-  builder.CreateStore(zero, index);
+  builder.CreateStore(zero, indexPtr);
 
   auto testBB = llvm::BasicBlock::Create(context, "test", function);
   auto loopBB = llvm::BasicBlock::Create(context, "loop", function);
@@ -374,6 +481,7 @@ llvm::Value *AST::ArrayExp::codegen() {
 
   builder.SetInsertPoint(testBB);
 
+  auto index = builder.CreateLoad(indexPtr, indexName);
   auto EndCond = builder.CreateICmpSLT(index, size, "loopcond");
   // auto loopEndBB = builder.GetInsertBlock();
 
@@ -385,9 +493,6 @@ llvm::Value *AST::ArrayExp::codegen() {
   // loop:
   // variable->addIncoming(low, preheadBB);
 
-  auto oldVal = values[indexName];
-  if (oldVal) values.popOne(indexName);
-  values.push(indexName, index);
   // TODO: check its non-type value
   auto elePtr = builder.CreateGEP(eleType, arrayPtr, index, "elePtr");
   checkStore(init, elePtr);
@@ -400,7 +505,7 @@ llvm::Value *AST::ArrayExp::codegen() {
 
   auto nextVar = builder.CreateAdd(
       index, llvm::ConstantInt::get(context, llvm::APInt(64, 1)), "nextvar");
-  builder.CreateStore(nextVar, index);
+  builder.CreateStore(nextVar, indexPtr);
 
   builder.CreateBr(testBB);
 
@@ -408,11 +513,6 @@ llvm::Value *AST::ArrayExp::codegen() {
   builder.SetInsertPoint(afterBB);
 
   // variable->addIncoming(next, loopEndBB);
-
-  if (oldVal)
-    values[indexName] = oldVal;
-  else
-    values.popOne(indexName);
 
   return arrayPtr;
 }
@@ -460,15 +560,25 @@ llvm::Value *AST::FieldVar::codegen() {
 }
 
 llvm::Value *AST::RecordExp::codegen() {
-  auto function = builder.GetInsertBlock()->getParent();
+  static auto allocaRecordFunction =
+      createIntrinsicFunction("allocaRecord", {llvm::Type::getInt64Ty(context)},
+                              llvm::Type::getInt8PtrTy(context));
+  builder.GetInsertBlock()->getParent();
   auto type = typeOf(type_);
   if (!type) return nullptr;
   if (!type->isPointerTy()) return logErrorV("Require a struct type");
-  type = getElementType(type);
-  if (!type->isStructTy()) return logErrorV("Require a struct type");
+  auto eleType = getElementType(type);
+  if (!eleType->isStructTy()) return logErrorV("Require a struct type");
   auto typeDec = dynamic_cast<RecordType *>(typeDecs[type_]);
   assert(typeDec);
-  auto var = createEntryBlockAlloca(function, type, "record");
+  // auto var = createEntryBlockAlloca(function, type, "record");
+  auto size = module->getDataLayout().getTypeAllocSize(eleType);
+  llvm::Value *var =
+      builder.CreateCall(allocaRecordFunction,
+                         llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+                                                llvm::APInt(64, size)),
+                         "alloca");
+  var = builder.CreateBitCast(var, type, "record");
   size_t idx = 0u;
   if (typeDec->fields_.size() != fieldExps_.size())
     return logErrorV("Wrong number of fields");
@@ -481,7 +591,7 @@ llvm::Value *AST::RecordExp::codegen() {
     auto exp = field->exp_->codegen();
     if (!exp) return nullptr;
     auto elementPtr = builder.CreateGEP(
-        var,
+        typeOf(fieldDec->type_), var,
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
                                llvm::APInt(64, idx)),
         "elementPtr");
@@ -552,14 +662,7 @@ llvm::Type *AST::RecordType::codegen(std::set<std::string> &parentName) {
 }
 
 llvm::Value *AST::StringExp::codegen() {
-  std::vector<llvm::Constant *> str;
-  for (auto &c : val_)
-    str.push_back(llvm::Constant::getIntegerValue(
-        llvm::Type::getInt8Ty(context), llvm::APInt(8, (std::uint64_t)c)));
-  str.push_back(llvm::Constant::getIntegerValue(llvm::Type::getInt8Ty(context),
-                                                llvm::APInt(8, 0)));
-  return llvm::ConstantArray::get(
-      llvm::ArrayType::get(llvm::Type::getInt8Ty(context), val_.size()), str);
+  return builder.CreateGlobalStringPtr(val_, "str");
 }
 
 llvm::Function *AST::Prototype::codegen() {
@@ -576,8 +679,8 @@ llvm::Function *AST::Prototype::codegen() {
     retType = typeOf(result_);
     if (!retType) return nullptr;
   }
-  auto oldFunc = functions[name_];
-  if (oldFunc) rename(oldFunc->getName().str() + "-");
+  // auto oldFunc = functions[name_];
+  // if (oldFunc) rename(oldFunc->getName().str() + "-");
   auto functionType = llvm::FunctionType::get(retType, args, false);
   auto function = llvm::Function::Create(
       functionType, llvm::Function::InternalLinkage, name_, module.get());
@@ -587,6 +690,7 @@ llvm::Function *AST::Prototype::codegen() {
   return function;
 }
 
+// TODO: Static link
 llvm::Value *AST::FunctionDec::codegen() {
   auto function = proto_->codegen();
   if (functions.lookupOne(name_))

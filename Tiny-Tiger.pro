@@ -55,7 +55,8 @@ SOURCES += \
 #    src/assem.c \
     src/AST/ast.cpp \
     src/codegen/codegen.cpp \
-    src/utils/symboltable.cpp
+    src/utils/symboltable.cpp \
+    src/utils/runtime.cpp
 
 HEADERS += \
     src/mainwindow.h \
