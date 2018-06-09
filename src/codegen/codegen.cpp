@@ -206,7 +206,6 @@ llvm::Value *AST::VarExp::codegen(CodeGenContext &context) {
   if (!var) return nullptr;
   return context.builder.CreateLoad(var, var->getName());
 }
-
 llvm::Value *AST::AssignExp::codegen(CodeGenContext &context) {
   auto var = var_->codegen(context);
   if (!var) return nullptr;
@@ -403,45 +402,18 @@ llvm::Value *AST::ArrayExp::codegen(CodeGenContext &context) {
 
 llvm::Value *AST::SubscriptVar::codegen(CodeGenContext &context) {
   auto var = var_->codegen(context);
-  if (!var) return nullptr;
-  auto type = var->getType();
-  if (!type->isPointerTy() || !context.getElementType(type)->isPointerTy() ||
-      context.getElementType(context.getElementType(type))->isStructTy())
-    return context.logErrorV("Subscript is only for array type.");
-  var = context.builder.CreateLoad(var, "arrayPtr");
-  type = var->getType();
-  auto eleType = context.getElementType(type);
   auto exp = exp_->codegen(context);
-  if (!exp) return nullptr;
-  if (exp->getType() != llvm::Type::getInt64Ty(context.context))
-    return context.logErrorV("Subscript has to be integer value.");
-  return context.builder.CreateGEP(eleType, var, exp, "ptr");
+  if (!var) return nullptr;
+  var = context.builder.CreateLoad(var, "arrayPtr");
+  return context.builder.CreateGEP(type_, var, exp, "ptr");
 }
-
 llvm::Value *AST::FieldVar::codegen(CodeGenContext &context) {
-  //  auto var = var_->codegen(context);
-  //  if (!var) return nullptr;
-  //  auto type = var->getType();
-  //  if (!type->isPointerTy() || !context.getElementType(type)->isPointerTy()
-  //  ||
-  //      !context.getElementType(context.getElementType(type))->isStructTy())
-  //    return context.logErrorV("field reference is only for struct type.");
-  //  var = context.builder.CreateLoad(var, "structPtr");
-  //  type = var->getType();
-  //  llvm::StructType *eleType =
-  //      llvm::cast<llvm::StructType>(context.getElementType(type));
-
-  //  auto typeDec = dynamic_cast<RecordType
-  //  *>(typeDecs[eleType->getStructName()]); assert(typeDec); size_t i = 0u;
-  //  for (auto &field : typeDec->fields_)
-  //    if (field->name_ == field_)
-  //      break;
-  //    else
-  //      ++i;
-  //  auto idx = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
-  //                                    llvm::APInt(64, i));
-  //  return context.builder.CreateGEP(
-  //      context.typeOf(typeDec->fields_[i]->typeName_), var, idx, "ptr");
+  auto var = var_->codegen(context);
+  if (!var) return nullptr;
+  var = context.builder.CreateLoad(var, "structPtr");
+  auto idx = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
+                                    llvm::APInt(64, idx_));
+  return context.builder.CreateGEP(type_, var, idx, "ptr");
 }
 
 llvm::Value *AST::FieldExp::codegen(CodeGenContext &context) {
@@ -449,46 +421,34 @@ llvm::Value *AST::FieldExp::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::RecordExp::codegen(CodeGenContext &context) {
-  //  static auto allocaRecordFunction = context.createIntrinsicFunction(
-  //      "allocaRecord", {llvm::Type::getInt64Ty(context.context)},
-  //      llvm::Type::getInt8PtrTy(context.context));
-  //  context.builder.GetInsertBlock()->getParent();
-  //  if (!type_) return nullptr;
-  //  if (!type_->isPointerTy()) return context.logErrorV("Require a struct
-  //  type"); auto eleType = context.getElementType(type_); if
-  //  (!eleType->isStructTy()) return context.logErrorV("Require a struct
-  //  type"); auto typeDec = dynamic_cast<RecordType *>(typeDecs[typeName_]);
-  //  assert(typeDec);
-  //  // auto var = createEntryBlockAlloca(function, type, "record");
-  //  auto size = context.module->getDataLayout().getTypeAllocSize(eleType);
-  //  llvm::Value *var = context.builder.CreateCall(
-  //      allocaRecordFunction,
-  //      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
-  //                             llvm::APInt(64, size)),
-  //      "alloca");
-  //  var = context.builder.CreateBitCast(var, type_, "record");
-  //  size_t idx = 0u;
-  //  if (typeDec->fields_.size() != fieldExps_.size())
-  //    return context.logErrorV("Wrong number of fields");
-  //  for (auto &fieldDec : typeDec->fields_) {
-  //    auto &field = fieldExps_[idx];
-  //    if (field->getName() != fieldDec->name_)
-  //      return context.logErrorV(
-  //          field->getName() +
-  //          " is not a field or not on the right position of " + typeName_);
-  //    auto exp = field->codegen(context);
-  //    if (!exp) return nullptr;
-  //    auto elementPtr = context.builder.CreateGEP(
-  //        typeOf(fieldDec->typeName_), var,
-  //        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
-  //                               llvm::APInt(64, idx)),
-  //        "elementPtr");
-  //    // CHECK NIL
-  //    checkStore(exp, elementPtr);
-  //    // context.builder.CreateStore(exp, elementPtr);
-  //    ++idx;
-  //  }
-  //  return var;
+  static auto allocaRecordFunction = context.createIntrinsicFunction(
+      "allocaRecord", {llvm::Type::getInt64Ty(context.context)},
+      llvm::Type::getInt8PtrTy(context.context));
+  context.builder.GetInsertBlock()->getParent();
+  if (!type_) return nullptr;
+  // auto var = createEntryBlockAlloca(function, type, "record");
+  auto eleType = context.getElementType(type_);
+  auto size = context.module->getDataLayout().getTypeAllocSize(eleType);
+  llvm::Value *var = context.builder.CreateCall(
+      allocaRecordFunction,
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
+                             llvm::APInt(64, size)),
+      "alloca");
+  var = context.builder.CreateBitCast(var, type_, "record");
+  size_t idx = 0u;
+  for (auto &field : fieldExps_) {
+    auto exp = field->codegen(context);
+    if (!exp) return nullptr;
+    auto elementPtr = context.builder.CreateGEP(
+        field->type_, var,
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
+                               llvm::APInt(64, idx)),
+        "elementPtr");
+    context.checkStore(exp, elementPtr);
+    // context.builder.CreateStore(exp, elementPtr);
+    ++idx;
+  }
+  return var;
 }
 
 llvm::Value *AST::StringExp::codegen(CodeGenContext &context) {

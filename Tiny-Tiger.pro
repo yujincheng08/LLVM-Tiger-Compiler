@@ -13,9 +13,10 @@ LLVM = llvm-config
 TARGET = Tiny-Tiger
 TEMPLATE = app
 
-INCLUDEPATH += $$system($$LLVM --includedir)
-# llvm
+# INCLUDEPATH += /usr/local/Cellar/llvm/6.0.0/include
+# LIBS += -L"/usr/local/Cellar/llvm/6.0.0/lib" -lllvm
 
+INCLUDEPATH += $$system($$LLVM --includedir)
 
 QMAKE_CXXFLAGS += $(shell $$LLVM --cxxflags)
 
@@ -40,44 +41,42 @@ INCLUDEPATH += \
 
 SOURCES += \
     src/main.cpp \
-    src/mainwindow.cpp \
-#    src/util.c \
-#    src/table.c \
-#    src/symbol.c \
-#    src/errormsg.c \
-#    src/absyn.c \
-#    src/types.c \
-#    src/semant.c \
-#    src/env.c \
-#    src/temp.c \
-#    src/tree.c \
-#    src/canon.c \
-#    src/assem.c \
     src/AST/ast.cpp \
     src/codegen/codegen.cpp \
     src/utils/symboltable.cpp \
     src/utils/runtime.cpp \
-    src/utils/codegencontext.cpp
+    src/utils/codegencontext.cpp \
+    src/IDE/highlighter.cpp \
+    src/IDE/mainwindow.cpp \
+    src/IDE/compiler.cpp
 
 HEADERS += \
     src/mainwindow.h \
-#    src/util.h \
-#    src/table.h \
-#    src/symbol.h \
-#    src/errormsg.h \
-#    src/absyn.h \
-#    src/types.h \
-#    src/env.h \
-#    src/temp.h \
-#    src/tree.h \
-#    src/canon.h \
-#    src/assem.h \
-#    src/translate.h \
-#    src/frame.h \
     src/AST/ast.h \
     src/utils/symboltable.h \
-    src/utils/codegencontext.h
+    src/utils/codegencontext.h \
+    src/IDE/highlighter.h \
+    src/IDE/mainwindow.h \
+    src/IDE/compiler.h
 
 OTHER_FILES += \
     src/tiger.l \
     src/tiger.y
+
+FORMS += \
+    src/IDE/mainwindow.ui
+
+RESOURCES += \
+    res/res.qrc
+
+DISTFILES += \
+    res/icon1.png \
+    res/icon2.png \
+    res/icon3.png \
+    res/icon4.png \
+    res/icon5.png \
+    res/icon6.png \
+    res/icon7.png \
+    res/icon8.png \
+    res/icon9.png \
+    res/icon10.png

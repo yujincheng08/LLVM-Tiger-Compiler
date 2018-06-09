@@ -77,7 +77,7 @@ llvm::Type *CodeGenContext::typeOf(std::string const &name,
                                    std::set<std::string> &parentName) {
   if (auto type = types[name]) return type;
   auto typeDec = typeDecs[name];
-  if (!typeDec) logErrorT(name + " is not a type");
+  if (!typeDec) return logErrorT(name + " is not a type");
   return typeDec->codegen(parentName, *this);
 }
 

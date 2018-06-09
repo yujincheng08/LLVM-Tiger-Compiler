@@ -25,6 +25,7 @@
 namespace AST {
 class Type;
 class VarDec;
+class FunctionDec;
 }  // namespace AST
 
 class CodeGenContext {
@@ -38,9 +39,14 @@ class CodeGenContext {
   SymbolTable<llvm::Type> types;
   SymbolTable<AST::Type> typeDecs;
   SymbolTable<llvm::Function> functions;
+  SymbolTable<AST::FunctionDec> functionDecs;
 
   llvm::Type *intType{llvm::Type::getInt64Ty(context)};
   llvm::Type *voidType{llvm::Type::getVoidTy(context)};
+  llvm::Type *stringType{
+      llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(context))};
+  llvm::Type *nilType{
+      llvm::PointerType::getUnqual(llvm::StructType::get(context))};
   // llvm::Type *stringType{llvm::Type::getInt64Ty(context)};
 
   std::stack<
