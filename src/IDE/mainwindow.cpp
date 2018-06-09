@@ -204,8 +204,8 @@ void MainWindow::on_SBackGroundColor_triggered() {
 void MainWindow::on_O_About_triggered() {
   QMessageBox::information(
       this, "About Author",
-      "    The Spuer Tiger is designed by fanghao & yujincheng, students in ZJU of computer science and technology college.\n \
-                                                    ——June 2017");
+      "    The Spuer Tiger is designed by fanghao, yujincheng & liu qi, students in ZJU of computer science and technology college.\n \
+                                                    ——June 2018");
 }
 
 void MainWindow::on_O_Help_triggered() {
