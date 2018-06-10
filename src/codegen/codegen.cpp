@@ -349,9 +349,12 @@ llvm::Value *AST::CallExp::codegen(CodeGenContext &context) {
     size_t currentLevel = context.currentLevel;
     auto staticLink = context.staticLink.begin();
     llvm::Value *value = context.currentFrame;
-    while (currentLevel-- >= level)
-      value = context.builder.CreateGEP(*++staticLink, value, context.zero,
-                                        "staticLink");
+    while (currentLevel-- >= level) {
+      value =
+          context.builder.CreateGEP(llvm::PointerType::getUnqual(*++staticLink),
+                                    value, context.zero, "staticLink");
+      value = context.builder.CreateLoad(value, "frame");
+    }
     args.push_back(value);
   }
   for (size_t i = 0u; i != args_.size(); ++i) {
