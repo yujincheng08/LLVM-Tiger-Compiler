@@ -18,7 +18,9 @@ void Compiler::compile(QTreeWidgetItem *view_root, std::string s) {
 
   std::cout << s << std::endl;
 
-  root->print(view_root, 0);
-  CodeGenContext codeGenContext;
-  root->codegen(codeGenContext);
+  if (root) {
+    root->print(view_root, 0);
+    CodeGenContext codeGenContext;
+    root->codegen(codeGenContext);
+  }
 }

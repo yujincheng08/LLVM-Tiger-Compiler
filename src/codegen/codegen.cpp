@@ -7,8 +7,6 @@
 
 llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   // clear context.builder and context;
-  context.values.reset();
-  context.functions.reset();
   llvm::legacy::PassManager pm;
   pm.add(llvm::createPrintModulePass(llvm::outs()));
 
@@ -47,12 +45,24 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   auto mainFunction =
       llvm::Function::Create(mainProto, llvm::GlobalValue::ExternalLinkage,
                              "main", context.module.get());
+  context.staticLink.push_front(
+      llvm::StructType::create(context.context, "main"));
   auto block = llvm::BasicBlock::Create(context.context, "entry", mainFunction);
   context.types["int"] = context.intType;
   context.types["string"] = context.stringType;
   context.intrinsic();
   traverse(mainVariableTable_, context);
+  context.valueDecs.reset();
+  context.functionDecs.reset();
   context.builder.SetInsertPoint(block);
+  std::vector<llvm::Type *> localVar;
+  for (auto &var : mainVariableTable_) {
+    localVar.push_back(var->getType());
+    context.valueDecs.push(var->getName(), var);
+  }
+  context.staticLink.front()->setBody(localVar);
+  context.currentFrame = context.createEntryBlockAlloca(
+      mainFunction, context.staticLink.front(), "mainframe");
   root_->codegen(context);
   context.builder.CreateRet(llvm::ConstantInt::get(
       llvm::Type::getInt64Ty(context.context), llvm::APInt(64, 0)));
@@ -86,9 +96,9 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::SimpleVar::codegen(CodeGenContext &context) {
-  auto var = context.values[name_];
+  auto var = context.valueDecs[name_];
   if (!var) return context.logErrorV("Unknown variable name " + name_);
-  return var;
+  return var->read(context);
 }
 
 llvm::Value *AST::IntExp::codegen(CodeGenContext &context) {
@@ -120,10 +130,10 @@ llvm::Value *AST::ForExp::codegen(CodeGenContext &context) {
     return context.logErrorV("loop higher bound should be integer");
   auto function = context.builder.GetInsertBlock()->getParent();
   // TODO: it should read only in the body
-  auto variable = context.createEntryBlockAlloca(
-      function, llvm::Type::getInt64Ty(context.context), var_);
+  // auto variable = context.createEntryBlockAlloca(
+  // function, llvm::Type::getInt64Ty(context.context), var_);
   // before loop:
-  context.builder.CreateStore(low, variable);
+  context.builder.CreateStore(low, varDec_->read(context));
 
   auto testBB = llvm::BasicBlock::Create(context.context, "test", function);
   auto loopBB = llvm::BasicBlock::Create(context.context, "loop", function);
@@ -136,7 +146,8 @@ llvm::Value *AST::ForExp::codegen(CodeGenContext &context) {
   context.builder.SetInsertPoint(testBB);
 
   auto EndCond = context.builder.CreateICmpSLE(
-      context.builder.CreateLoad(variable, var_), high, "loopcond");
+      context.builder.CreateLoad(varDec_->read(context), var_), high,
+      "loopcond");
   // auto loopEndBB = context.builder.GetInsertBlock();
 
   // goto after or loop
@@ -147,9 +158,9 @@ llvm::Value *AST::ForExp::codegen(CodeGenContext &context) {
   // loop:
   // variable->addIncoming(low, preheadBB);
 
-  auto oldVal = context.values[var_];
-  if (oldVal) context.values.popOne(var_);
-  context.values.push(var_, variable);
+  auto oldVal = context.valueDecs[var_];
+  if (oldVal) context.valueDecs.popOne(var_);
+  context.valueDecs.push(var_, varDec_);
   // TODO: check its non-type value
   if (!body_->codegen(context)) return nullptr;
 
@@ -160,9 +171,9 @@ llvm::Value *AST::ForExp::codegen(CodeGenContext &context) {
   context.builder.SetInsertPoint(nextBB);
 
   auto nextVar = context.builder.CreateAdd(
-      context.builder.CreateLoad(variable, var_),
+      context.builder.CreateLoad(varDec_->read(context), var_),
       llvm::ConstantInt::get(context.context, llvm::APInt(64, 1)), "nextvar");
-  context.builder.CreateStore(nextVar, variable);
+  context.builder.CreateStore(nextVar, varDec_->read(context));
 
   context.builder.CreateBr(testBB);
 
@@ -172,9 +183,9 @@ llvm::Value *AST::ForExp::codegen(CodeGenContext &context) {
   // variable->addIncoming(next, loopEndBB);
 
   if (oldVal)
-    context.values[var_] = oldVal;
+    context.valueDecs[var_] = oldVal;
   else
-    context.values.popOne(var_);
+    context.valueDecs.popOne(var_);
 
   context.loopStack.pop();
 
@@ -188,12 +199,12 @@ llvm::Value *AST::SequenceExp::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::LetExp::codegen(CodeGenContext &context) {
-  context.values.enter();
-  context.functions.enter();
+  context.valueDecs.enter();
+  context.functionDecs.enter();
   for (auto &dec : decs_) dec->codegen(context);
   auto result = body_->codegen(context);
-  context.functions.exit();
-  context.values.exit();
+  context.functionDecs.exit();
+  context.valueDecs.exit();
   return result;
 }
 
@@ -314,17 +325,37 @@ llvm::Value *AST::WhileExp::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::CallExp::codegen(CodeGenContext &context) {
-  auto callee = context.functions[func_];
-  if (!callee) return context.logErrorV("Unknown function referenced");
+  auto callee = context.functionDecs[func_];
+  llvm::Function *function;
+  llvm::Function::LinkageTypes type;
+  size_t level = 0u;
+  if (!callee) {
+    function = context.functions[func_];
+    if (!function) return context.logErrorV("Function " + func_ + " not found");
+    type = llvm::Function::ExternalLinkage;
+  } else {
+    function = callee->getProto().getFunction();
+    type = function->getLinkage();
+    level = callee->getLevel();
+  }
 
   // If argument mismatch error.
   std::vector<llvm::Value *> args;
+  if (type == llvm::Function::InternalLinkage) {
+    size_t currentLevel = context.currentLevel;
+    auto staticLink = context.staticLink.begin();
+    llvm::Value *value = context.currentFrame;
+    while (currentLevel-- >= level)
+      value = context.builder.CreateGEP(*++staticLink, value, context.zero,
+                                        "staticLink");
+    args.push_back(value);
+  }
   for (size_t i = 0u; i != args_.size(); ++i) {
     args.push_back(args_[i]->codegen(context));
     if (!args.back()) return nullptr;
   }
 
-  return context.builder.CreateCall(callee, args, "calltmp");
+  return context.builder.CreateCall(function, args, "calltmp");
 }
 
 llvm::Value *AST::ArrayExp::codegen(CodeGenContext &context) {
@@ -449,81 +480,93 @@ llvm::Value *AST::StringExp::codegen(CodeGenContext &context) {
   return context.builder.CreateGlobalStringPtr(val_, "str");
 }
 
-llvm::Function *AST::Prototype::codegen(CodeGenContext &context) {
-  std::vector<llvm::Type *> args;
-  for (auto &arg : params_) {
-    auto argType = arg->getType();
-    if (!argType) return nullptr;
-    args.push_back(argType);
-  }
+llvm::Function *AST::Prototype::codegen(CodeGenContext &) {
   auto *retType = resultType_;
 
   if (!retType) return nullptr;
 
   // auto oldFunc = functions[name_];
   // if (oldFunc) rename(oldFunc->getName().str() + "-");
-  auto functionType = llvm::FunctionType::get(retType, args, false);
-  auto function =
-      llvm::Function::Create(functionType, llvm::Function::InternalLinkage,
-                             name_, context.module.get());
 
   size_t idx = 0u;
-  for (auto &arg : function->args()) arg.setName(params_[idx++]->getName());
-  return function;
+  size_t offset = 0u;
+  if (function_->getLinkage() == llvm::Function::ExternalLinkage)
+    offset = 0u;
+  else
+    offset = 1u;
+
+  for (auto &arg : function_->args())
+    if (idx >= offset)
+      arg.setName(params_[idx++ - offset]->getName());
+    else {
+      arg.setName("staticLink");
+      ++idx;
+    }
+  return function_;
 }
 
 // TODO: Static link
 llvm::Value *AST::FunctionDec::codegen(CodeGenContext &context) {
   auto function = proto_->codegen(context);
-  if (context.functions.lookupOne(name_))
+  if (context.functionDecs.lookupOne(name_))
     return context.logErrorV("Function " + name_ +
                              " is already defined in same scope.");
   // auto function = module->getFunction(proto.getName());
   if (!function) return nullptr;
-  context.functions.push(name_, function);
+  context.functionDecs.push(name_, this);
 
   auto oldBB = context.builder.GetInsertBlock();
   auto BB = llvm::BasicBlock::Create(context.context, "entry", function);
   context.builder.SetInsertPoint(BB);
   // llvm::StructType::create(context.context, );
-  context.values.enter();
-  for (auto &arg : function->args()) {
-    auto argName = arg.getName();
-    auto argAlloca =
-        context.createEntryBlockAlloca(function, arg.getType(), argName);
-    context.checkStore(&arg, argAlloca);
-    // context.builder.CreateStore(&arg, argAlloca);
-    context.values.push(argName, argAlloca);
+  context.valueDecs.enter();
+  ++context.currentLevel;
+  context.staticLink.push_front(proto_->getFrame());
+  std::vector<llvm::Type *> localVar;
+  for (auto &var : variableTable_) {
+    localVar.push_back(var->getType());
   }
-
+  proto_->getFrame()->setBody(localVar);
+  auto oldFrame = context.currentFrame;
+  context.currentFrame = context.createEntryBlockAlloca(
+      function, proto_->getFrame(), name_ + "frame");
+  size_t idx = 0u;
+  auto &params = proto_->getParams();
+  for (auto &arg : function->args()) {
+    if (idx == 0) {
+      context.builder.CreateStore(&arg, proto_->getStaticLink()->read(context));
+      idx++;
+    } else {
+      auto var = params[idx - 1]->getVar();
+      context.builder.CreateStore(&arg, var->read(context));
+      context.valueDecs.push(arg.getName(), var);
+    }
+  }
   if (auto retVal = body_->codegen(context)) {
     context.builder.CreateRet(retVal);
     llvm::verifyFunction(*function);
-    context.values.exit();
+    context.valueDecs.exit();
     context.builder.SetInsertPoint(oldBB);
+    context.currentFrame = oldFrame;
+    context.staticLink.pop_front();
+    --context.currentLevel;
     return function;
   }
-  context.values.exit();
+  context.valueDecs.exit();
   function->eraseFromParent();
-  context.functions.popOne(name_);
+  context.functionDecs.popOne(name_);
   context.builder.SetInsertPoint(oldBB);
+  context.staticLink.pop_front();
+  context.currentFrame = oldFrame;
+  --context.currentLevel;
   return context.logErrorV("Function " + name_ + " genteration failed");
 }
 
 llvm::Value *AST::VarDec::codegen(CodeGenContext &context) {
-  llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+  // llvm::Function *function = context.builder.GetInsertBlock()->getParent();
   auto init = init_->codegen(context);
   if (!init) return nullptr;
-  if (context.values.lookupOne(name_))
-    return context.logErrorV(name_ + " is already defined in this function.");
-  llvm::Type *type;
-  if (typeName_.empty())
-    type = init->getType();
-  else {
-    type = type_;
-    if (!type) return nullptr;
-  }
-  auto *variable = context.createEntryBlockAlloca(function, type, name_);
+  // auto *variable = context.createEntryBlockAlloca(function, type_, name_);
   //  if (isNil(init)) {
   //    if (!type->isStructTy()) {
   //      return context.logErrorVV("Nil can only assign to struct type");
@@ -532,10 +575,25 @@ llvm::Value *AST::VarDec::codegen(CodeGenContext &context) {
   //      llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(type));
   //    }
   //  }
-  context.checkStore(init, variable);
+  auto var = context.checkStore(init, read(context));
   // context.builder.CreateStore(init, variable);
-  context.values.push(name_, variable);
-  return variable;
+  context.valueDecs.push(name_, this);
+  return var;
+}
+
+llvm::Value *AST::VarDec::read(CodeGenContext &context) const {
+  size_t currentLevel = context.currentLevel;
+  auto staticLink = context.staticLink.begin();
+  llvm::Value *value = context.currentFrame;
+  while (currentLevel-- > level_) {
+    value = context.builder.CreateGEP(*++staticLink, value, context.zero,
+                                      "staticLink");
+  }
+  return context.builder.CreateGEP(
+      type_, value,
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
+                             llvm::APInt(64, offset_)),
+      name_);
 }
 
 llvm::Value *AST::TypeDec::codegen(CodeGenContext &context) {

@@ -34,12 +34,16 @@ class CodeGenContext {
   llvm::IRBuilder<> builder{context};
   std::unique_ptr<llvm::Module> module{
       llvm::make_unique<llvm::Module>("main", context)};
-  SymbolTable<llvm::AllocaInst> values;
   SymbolTable<AST::VarDec> valueDecs;
   SymbolTable<llvm::Type> types;
   SymbolTable<AST::Type> typeDecs;
   SymbolTable<llvm::Function> functions;
-  SymbolTable<llvm::FunctionType> functionDecs;
+  SymbolTable<AST::FunctionDec> functionDecs;
+  // TODO
+  // SymbolTable<std::string> externalFunctions;
+  std::deque<llvm::StructType *> staticLink;
+  llvm::AllocaInst *currentFrame;
+  size_t currentLevel = 0;
 
   llvm::Type *intType{llvm::Type::getInt64Ty(context)};
   llvm::Type *voidType{llvm::Type::getVoidTy(context)};
@@ -58,6 +62,8 @@ class CodeGenContext {
   std::stack<
       std::tuple<llvm::BasicBlock * /*next*/, llvm::BasicBlock * /*after*/>>
       loopStack;
+  llvm::Value *zero{llvm::ConstantInt::get(intType, llvm::APInt(64, 0))};
+  llvm::Value *one{llvm::ConstantInt::get(intType, llvm::APInt(64, 1))};
 
   llvm::Value *logErrorV(std::string const &msg);
 

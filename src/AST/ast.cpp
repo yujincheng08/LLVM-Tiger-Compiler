@@ -27,7 +27,7 @@ void Root::print(QTreeWidgetItem *parent, int n) {
   printf("AST_end\n");
 }
 
-llvm::Type *Root::traverse(vector<string> &, CodeGenContext &context) {
+llvm::Type *Root::traverse(vector<VarDec *> &, CodeGenContext &context) {
   context.typeDecs.reset();
   return root_->traverse(mainVariableTable_, context);
 }
@@ -54,7 +54,7 @@ void FieldVar::print(QTreeWidgetItem *parent, int n) {
   var_->print(cur, n + 1);
 }
 
-llvm::Type *AST::FieldVar::traverse(vector<std::string> &variableTable,
+llvm::Type *AST::FieldVar::traverse(vector<VarDec *> &variableTable,
                                     CodeGenContext &context) {
   //
   auto var = var_->traverse(variableTable, context);
@@ -86,7 +86,7 @@ void SubscriptVar::print(QTreeWidgetItem *parent, int n) {
   exp_->print(cur, n + 1);
 }
 
-llvm::Type *AST::SubscriptVar::traverse(vector<std::string> &variableTable,
+llvm::Type *AST::SubscriptVar::traverse(vector<VarDec *> &variableTable,
                                         CodeGenContext &context) {
   auto var = var_->traverse(variableTable, context);
   if (!var) return nullptr;
@@ -109,7 +109,7 @@ void VarExp::print(QTreeWidgetItem *parent, int n) {
   var_->print(cur, n + 1);
 }
 
-llvm::Type *AST::VarExp::traverse(vector<std::string> &variableTable,
+llvm::Type *AST::VarExp::traverse(vector<VarDec *> &variableTable,
                                   CodeGenContext &context) {
   return var_->traverse(variableTable, context);
 }
@@ -121,8 +121,7 @@ void NilExp::print(QTreeWidgetItem *parent, int n) {
   Q_UNUSED(cur);
 }
 
-llvm::Type *AST::NilExp::traverse(vector<std::string> &,
-                                  CodeGenContext &context) {
+llvm::Type *AST::NilExp::traverse(vector<VarDec *> &, CodeGenContext &context) {
   return context.nilType;
 }
 
@@ -136,8 +135,7 @@ void IntExp::print(QTreeWidgetItem *parent, int n) {
   add_node(cur, "[val: " + std::to_string(val_) + "]", icon);
 }
 
-llvm::Type *AST::IntExp::traverse(vector<std::string> &,
-                                  CodeGenContext &context) {
+llvm::Type *AST::IntExp::traverse(vector<VarDec *> &, CodeGenContext &context) {
   return context.intType;
 }
 
@@ -151,7 +149,7 @@ void StringExp::print(QTreeWidgetItem *parent, int n) {
   add_node(cur, "[val: " + val_ + "]", icon);
 }
 
-llvm::Type *AST::StringExp::traverse(vector<std::string> &,
+llvm::Type *AST::StringExp::traverse(vector<VarDec *> &,
                                      CodeGenContext &context) {
   return context.stringType;
 }
@@ -170,21 +168,26 @@ void CallExp::print(QTreeWidgetItem *parent, int n) {
   }
 }
 
-llvm::Type *CallExp::traverse(vector<string> &variableTable,
+llvm::Type *CallExp::traverse(vector<VarDec *> &variableTable,
                               CodeGenContext &context) {
-  auto functionDec = context.functionDecs[func_];
-  if (!functionDec) return context.logErrorT("Function undeclared");
-  auto params = functionDec->params();
-  if (args_.size() != params.size())
+  auto function = context.functions[func_];
+  if (!function)
+    return context.logErrorT("Function " + func_ + "undeclared");
+  auto functionType = function->getFunctionType();
+  size_t i = 0u;
+  if (function->getLinkage() == llvm::Function::ExternalLinkage)
+    i = 0u;
+  else
+    i = 1u;
+  if (args_.size() != functionType->getNumParams() - i)
     return context.logErrorT("Incorrect # arguments passed");
 
-  size_t i = 0u;
   for (auto &exp : args_) {
     auto type = exp->traverse(variableTable, context);
-    auto arg = params[i++];
+    auto arg = functionType->getParamType(i++);
     if (arg != type) return context.logErrorT("Params type not match");
   }
-  return functionDec->getReturnType();
+  return function->getReturnType();
 }
 
 void BinaryExp::print(QTreeWidgetItem *parent, int n) {
@@ -200,7 +203,7 @@ void BinaryExp::print(QTreeWidgetItem *parent, int n) {
   right_->print(cur, n + 1);
 }
 
-llvm::Type *BinaryExp::traverse(vector<string> &variableTable,
+llvm::Type *BinaryExp::traverse(vector<VarDec *> &variableTable,
                                 CodeGenContext &context) {
   auto left = left_->traverse(variableTable, context);
   auto right = right_->traverse(variableTable, context);
@@ -211,10 +214,13 @@ llvm::Type *BinaryExp::traverse(vector<string> &variableTable,
     return nullptr;
 }
 
-llvm::Type *Field::traverse(vector<string> &variableTable,
+llvm::Type *Field::traverse(vector<VarDec *> &variableTable,
                             CodeGenContext &context) {
-  variableTable.push_back(name_);
   type_ = context.typeOf(typeName_);
+  varDec_ =
+      new VarDec(name_, type_, variableTable.size(), context.currentLevel);
+  context.valueDecs.push(name_, varDec_);
+  variableTable.push_back(varDec_);
   return type_;
 }
 
@@ -241,7 +247,7 @@ void FieldExp::print(QTreeWidgetItem *parent, int n) {
   exp_->print(cur, n + 1);
 }
 
-llvm::Type *FieldExp::traverse(vector<string> &variableTable,
+llvm::Type *FieldExp::traverse(vector<VarDec *> &variableTable,
                                CodeGenContext &context) {
   type_ = exp_->traverse(variableTable, context);
   return type_;
@@ -259,7 +265,7 @@ void RecordExp::print(QTreeWidgetItem *parent, int n) {
   }
 }
 
-llvm::Type *RecordExp::traverse(vector<string> &variableTable,
+llvm::Type *RecordExp::traverse(vector<VarDec *> &variableTable,
                                 CodeGenContext &context) {
   type_ = context.typeOf(typeName_);
   if (!type_->isPointerTy()) return context.logErrorT("Require a struct type");
@@ -295,7 +301,7 @@ void SequenceExp::print(QTreeWidgetItem *parent, int n) {
   }
 }
 
-llvm::Type *SequenceExp::traverse(vector<string> &variableTable,
+llvm::Type *SequenceExp::traverse(vector<VarDec *> &variableTable,
                                   CodeGenContext &context) {
   llvm::Type *last;
   for (auto &exp : exps_) {
@@ -313,7 +319,7 @@ void AssignExp::print(QTreeWidgetItem *parent, int n) {
   exp_->print(cur, n + 1);
 }
 
-llvm::Type *AssignExp::traverse(vector<string> &variableTable,
+llvm::Type *AssignExp::traverse(vector<VarDec *> &variableTable,
                                 CodeGenContext &context) {
   auto var = var_->traverse(variableTable, context);
   if (!var) return nullptr;
@@ -335,7 +341,7 @@ void IfExp::print(QTreeWidgetItem *parent, int n) {
   if (else_) else_->print(cur, n + 1);
 }
 
-llvm::Type *IfExp::traverse(vector<string> &variableTable,
+llvm::Type *IfExp::traverse(vector<VarDec *> &variableTable,
                             CodeGenContext &context) {
   auto test = test_->traverse(variableTable, context);
   if (!test) return nullptr;
@@ -363,7 +369,7 @@ void WhileExp::print(QTreeWidgetItem *parent, int n) {
   body_->print(cur, n + 1);
 }
 
-llvm::Type *WhileExp::traverse(vector<string> &variableTable,
+llvm::Type *WhileExp::traverse(vector<VarDec *> &variableTable,
                                CodeGenContext &context) {
   auto test = test_->traverse(variableTable, context);
   if (!test) return nullptr;
@@ -386,7 +392,7 @@ void ForExp::print(QTreeWidgetItem *parent, int n) {
   body_->print(cur, n + 1);
 }
 
-llvm::Type *ForExp::traverse(vector<string> &variableTable,
+llvm::Type *ForExp::traverse(vector<VarDec *> &variableTable,
                              CodeGenContext &context) {
   auto low = low_->traverse(variableTable, context);
   if (!low) return nullptr;
@@ -397,7 +403,10 @@ llvm::Type *ForExp::traverse(vector<string> &variableTable,
   if (!low->isIntegerTy() || !high->isIntegerTy())
     return context.logErrorT("For bounds require integer");
   if (!body->isVoidTy()) return context.logErrorT("Loop body should be void");
-  variableTable.push_back(var_);
+  varDec_ = new VarDec(var_, context.intType, variableTable.size(),
+                       context.currentLevel);
+  context.valueDecs.push(var_, varDec_);
+  variableTable.push_back(varDec_);
   // TODO: check body void
   return context.voidType;
 }
@@ -409,7 +418,7 @@ void BreakExp::print(QTreeWidgetItem *parent, int n) {
   Q_UNUSED(cur);
 }
 
-llvm::Type *AST::BreakExp::traverse(vector<std::string> &,
+llvm::Type *AST::BreakExp::traverse(vector<VarDec *> &,
                                     CodeGenContext &context) {
   return context.voidType;
 }
@@ -424,30 +433,30 @@ void LetExp::print(QTreeWidgetItem *parent, int n) {
   body_->print(cur, n + 1);
 }
 
-llvm::Type *LetExp::traverse(vector<string> &variableTable,
+llvm::Type *LetExp::traverse(vector<VarDec *> &variableTable,
                              CodeGenContext &context) {
   context.types.enter();
   context.typeDecs.enter();
   context.valueDecs.enter();
-  context.functionDecs.enter();
+  context.functions.enter();
   for (auto &dec : decs_) {
     dec->traverse(variableTable, context);
   }
-  body_->traverse(variableTable, context);
-  context.functionDecs.exit();
+  auto body = body_->traverse(variableTable, context);
+  context.functions.exit();
   context.valueDecs.exit();
   context.types.exit();
   context.typeDecs.exit();
-  return context.voidType;
+  return body;
 }
 
-llvm::Type *TypeDec::traverse(vector<string> &, CodeGenContext &context) {
+llvm::Type *TypeDec::traverse(vector<VarDec *> &, CodeGenContext &context) {
   type_->setName(name_);
   context.typeDecs[name_] = type_.get();
   return context.voidType;
 }
 
-llvm::Type *ArrayExp::traverse(vector<string> &variableTable,
+llvm::Type *ArrayExp::traverse(vector<VarDec *> &variableTable,
                                CodeGenContext &context) {
   type_ = context.typeOf(typeName_);
   if (!type_) return nullptr;
@@ -489,10 +498,15 @@ void Prototype::print(QTreeWidgetItem *parent, int n) {
   }
 }
 
-llvm::FunctionType *Prototype::traverse(vector<string> &variableTable,
+llvm::FunctionType *Prototype::traverse(vector<VarDec *> &variableTable,
                                         CodeGenContext &context) {
   std::vector<llvm::Type *> args;
-
+  auto linkType = llvm::PointerType::getUnqual(context.staticLink.front());
+  args.push_back(linkType);
+  frame = llvm::StructType::create(context.context, name_ + "Frame");
+  staticLink_ = new VarDec("staticLink", linkType, variableTable.size(),
+                           context.currentLevel);
+  variableTable.push_back(staticLink_);
   for (auto &field : params_) {
     args.push_back(field->traverse(variableTable, context));
     if (!args.back()) return nullptr;
@@ -503,7 +517,11 @@ llvm::FunctionType *Prototype::traverse(vector<string> &variableTable,
     resultType_ = context.typeOf(result_);
   }
   if (!resultType_) return nullptr;
-  return llvm::FunctionType::get(resultType_, args, false);
+  auto functionType = llvm::FunctionType::get(resultType_, args, false);
+  function_ =
+      llvm::Function::Create(functionType, llvm::Function::InternalLinkage,
+                             name_, context.module.get());
+  return functionType;
 }
 
 void FunctionDec::print(QTreeWidgetItem *parent, int n) {
@@ -519,34 +537,41 @@ void FunctionDec::print(QTreeWidgetItem *parent, int n) {
   body_->print(cur, n + 1);
 }
 
-llvm::Type *FunctionDec::traverse(vector<string> &, CodeGenContext &context) {
-  if (context.functionDecs.lookupOne(name_))
+llvm::Type *FunctionDec::traverse(vector<VarDec *> &, CodeGenContext &context) {
+  if (context.functions.lookupOne(name_))
     return context.logErrorT("Function " + name_ +
                              " is already defined in same scope.");
   context.valueDecs.enter();
+  level_ = ++context.currentLevel;
   auto proto = proto_->traverse(variableTable_, context);
   if (!proto) return nullptr;
-  context.functionDecs.push(name_, proto);
+  context.staticLink.push_front(proto_->getFrame());
+  context.functions.push(name_, proto_->getFunction());
   auto body = body_->traverse(variableTable_, context);
+  context.staticLink.pop_front();
   if (!body) return nullptr;
   context.valueDecs.exit();
-  context.functionDecs.popOne(name_);
-  if (!proto->isVoidTy() && proto != body)
+  --context.currentLevel;
+  auto retType = proto_->getResultType();
+  if (!retType->isVoidTy() && retType != body)
     return context.logErrorT("Function retrun type not match");
-  return proto;
+  return context.voidType;
 }
 
-llvm::Type *SimpleVar::traverse(vector<string> &, CodeGenContext &context) {
+llvm::Type *SimpleVar::traverse(vector<VarDec *> &, CodeGenContext &context) {
   // TODO: check
   auto type = context.valueDecs[name_];
   if (!type) return context.logErrorT(name_ + " is not defined");
   return type->getType();
 }
 
-llvm::Type *VarDec::traverse(vector<string> &variableTable,
+llvm::Type *VarDec::traverse(vector<VarDec *> &variableTable,
                              CodeGenContext &context) {
-  offset = variableTable.size();
-  variableTable.push_back(name_);
+  if (context.valueDecs.lookupOne(name_))
+    return context.logErrorT(name_ + " is already defined in this function.");
+  offset_ = variableTable.size();
+  level_ = context.currentLevel;
+  variableTable.push_back(this);
   auto init = init_->traverse(variableTable, context);
   if (typeName_.empty()) {
     type_ = init;

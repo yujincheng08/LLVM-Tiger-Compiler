@@ -1,8 +1,8 @@
 #ifndef AST_H
 #define AST_H
 
-#include <llvm/IR/Value.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Value.h>
 #include <utils/codegencontext.h>
 #include <QIcon>
 #include <QString>
@@ -23,6 +23,8 @@ using std::string;
 using std::unique_ptr;
 using std::vector;
 
+class VarDec;
+
 class Node {
   size_t pos_;
 
@@ -31,7 +33,7 @@ class Node {
   virtual Value *codegen(CodeGenContext &context) = 0;
   void setPos(const size_t &pos) { pos_ = pos; }
 
-  virtual llvm::Type *traverse(vector<string> &, CodeGenContext &) = 0;
+  virtual llvm::Type *traverse(vector<VarDec *> &, CodeGenContext &) = 0;
   virtual void print(QTreeWidgetItem *parent, int n) = 0;
 };
 
@@ -47,7 +49,7 @@ class Exp : public Node {
 
 class Root : public Node {
   unique_ptr<Exp> root_;
-  vector<string> mainVariableTable_;
+  vector<VarDec *> mainVariableTable_;
 
  protected:
   QString icon = ":/icon1.png";
@@ -55,7 +57,7 @@ class Root : public Node {
  public:
   Root(unique_ptr<Exp> root) : root_(move(root)) {}
   Value *codegen(CodeGenContext &context) override;
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -90,7 +92,7 @@ class SimpleVar : public Var {
  public:
   SimpleVar(string name) : name_(move(name)) {}
   Value *codegen(CodeGenContext &context) override;
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -106,7 +108,7 @@ class FieldVar : public Var {
       : var_(move(var)), field_(move(field)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -121,7 +123,7 @@ class SubscriptVar : public Var {
       : var_(move(var)), exp_(move(exp)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -133,7 +135,7 @@ class VarExp : public Exp {
   VarExp(unique_ptr<Var> var) : var_(move(var)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -144,7 +146,7 @@ class NilExp : public Exp {
   NilExp() = default;
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -156,7 +158,7 @@ class IntExp : public Exp {
   IntExp(int const &val) : val_(val) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -168,7 +170,7 @@ class StringExp : public Exp {
   StringExp(string val) : val_(move(val)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -184,7 +186,7 @@ class CallExp : public Exp {
   }
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -222,7 +224,7 @@ class BinaryExp : public Exp {
       : op_(op), left_(move(left)), right_(move(right)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -236,14 +238,17 @@ class Field {
   string name_;
   string typeName_;
   llvm::Type *type_{nullptr};
+  VarDec *varDec_{nullptr};
 
  public:
   Field(string name, string type) : name_(move(name)), typeName_(move(type)) {}
 
-  llvm::Type *traverse(vector<string> &variableTable, CodeGenContext &context);
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
+                       CodeGenContext &context);
   void print(QTreeWidgetItem *parent, int n);
   llvm::Type *getType() const { return type_; }
   const string &getName() const { return name_; }
+  VarDec *getVar() const { return varDec_; }
 };
 
 class FieldExp : public Exp {
@@ -263,7 +268,7 @@ class FieldExp : public Exp {
 
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<std::string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -281,7 +286,7 @@ class RecordExp : public Exp {
   }
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<std::string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -295,7 +300,7 @@ class SequenceExp : public Exp {
   }
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -309,7 +314,7 @@ class AssignExp : public Exp {
       : var_(move(var)), exp_(move(exp)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<std::string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -324,7 +329,7 @@ class IfExp : public Exp {
       : test_(move(test)), then_(move(then)), else_(move(elsee)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<std::string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -338,7 +343,7 @@ class WhileExp : public Exp {
       : test_(move(test)), body_(move(body)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<std::string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -349,6 +354,7 @@ class ForExp : public Exp {
   unique_ptr<Exp> high_;
   unique_ptr<Exp> body_;
   // bool escape;
+  VarDec *varDec_{nullptr};
 
  public:
   ForExp(string var, unique_ptr<Exp> low, unique_ptr<Exp> high,
@@ -359,7 +365,7 @@ class ForExp : public Exp {
         body_(move(body)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -369,7 +375,7 @@ class BreakExp : public Exp {
  public:
   BreakExp() = default;
   Value *codegen(CodeGenContext &context) override;
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
 
   void print(QTreeWidgetItem *parent, int n) override;
@@ -386,7 +392,7 @@ class LetExp : public Exp {
   }
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -402,7 +408,7 @@ class ArrayExp : public Exp {
       : typeName_(move(type)), size_(move(size)), init_(move(init)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<std::string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -412,6 +418,9 @@ class Prototype {
   vector<unique_ptr<Field>> params_;
   string result_;
   llvm::Type *resultType_{nullptr};
+  llvm::Function *function_{nullptr};
+  VarDec *staticLink_{nullptr};
+  llvm::StructType *frame{nullptr};
 
  protected:
   QString icon = ":/icon8.png";
@@ -431,41 +440,54 @@ class Prototype {
 
   llvm::Type *getResultType() const { return resultType_; }
 
-  llvm::FunctionType *traverse(vector<string> &variableTable, CodeGenContext &context);
+  llvm::FunctionType *traverse(vector<VarDec *> &variableTable,
+                               CodeGenContext &context);
+  llvm::StructType *getFrame() const { return frame; }
+
+  llvm::Function *getFunction() const { return function_; }
+  VarDec *getStaticLink() const { return staticLink_; }
   void print(QTreeWidgetItem *parent, int n);
 };
 
 class FunctionDec : public Dec {
   unique_ptr<Prototype> proto_;
   unique_ptr<Exp> body_;
-  vector<string> variableTable_;
+  vector<VarDec *> variableTable_;
+  size_t level_{0u};
 
  public:
   FunctionDec(string name, unique_ptr<Prototype> proto, unique_ptr<Exp> body)
       : Dec(move(name)), proto_(move(proto)), body_(move(body)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   Prototype &getProto() const { return *proto_; }
   void print(QTreeWidgetItem *parent, int n) override;
+  size_t getLevel() const { return level_; }
 };
 
 class VarDec : public Dec {
   string typeName_;
-  unique_ptr<Exp> init_;
+  unique_ptr<Exp> init_{nullptr};
   // bool escape;
-  size_t offset;
+  size_t offset_;
+  size_t level_;
   llvm::Type *type_{nullptr};
 
  public:
   VarDec(string name, string type, unique_ptr<Exp> init)
       : Dec(move(name)), typeName_(move(type)), init_(move(init)) {}
+  VarDec(string name, llvm::Type *type, size_t const &offset,
+         size_t const &level)
+      : Dec(move(name)), offset_(offset), level_(level), type_(type) {}
   Value *codegen(CodeGenContext &context) override;
 
   llvm::Type *getType() const { return type_; }
+  const string &getName() const { return name_; }
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Value *read(CodeGenContext &context) const;
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };
@@ -478,7 +500,7 @@ class TypeDec : public Dec {
       : Dec(move(name)), type_(move(type)) {}
   Value *codegen(CodeGenContext &context) override;
 
-  llvm::Type *traverse(vector<string> &variableTable,
+  llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
 };

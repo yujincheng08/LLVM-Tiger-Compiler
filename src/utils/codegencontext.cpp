@@ -23,9 +23,9 @@ llvm::Function *CodeGenContext::createIntrinsicFunction(
     std::string const &name, std::vector<llvm::Type *> const &args,
     llvm::Type *retType) {
   auto functionType = llvm::FunctionType::get(retType, args, false);
-  functionDecs.push(name, functionType);
   auto function = llvm::Function::Create(
       functionType, llvm::Function::ExternalLinkage, name, module.get());
+  functions.push(name, function);
   return function;
 }
 
