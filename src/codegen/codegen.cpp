@@ -67,7 +67,7 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   root_->codegen(context);
   context.builder.CreateRet(llvm::ConstantInt::get(
       llvm::Type::getInt64Ty(context.context), llvm::APInt(64, 0)));
-  if (!llvm::verifyFunction(*mainFunction)) {
+  if (llvm::verifyFunction(*mainFunction, &llvm::errs())) {
     return context.logErrorV("Generate fail");
   }
   // llvm::ReturnInst::Create(context, block);
@@ -269,7 +269,7 @@ llvm::Value *AST::IfExp::codegen(CodeGenContext &context) {
   function->getBasicBlockList().push_back(mergeBB);
   context.builder.SetInsertPoint(mergeBB);
 
-  if (else_) {
+  if (else_ && !then->getType()->isVoidTy() && !elsee->getType()->isVoidTy()) {
     auto PN = context.builder.CreatePHI(then->getType(), 2, "iftmp");
     PN->addIncoming(then, thenBB);
     PN->addIncoming(elsee, elseBB);
@@ -359,7 +359,11 @@ llvm::Value *AST::CallExp::codegen(CodeGenContext &context) {
     if (!args.back()) return nullptr;
   }
 
-  return context.builder.CreateCall(function, args, "calltmp");
+  if (function->getFunctionType()->getReturnType()->isVoidTy()) {
+    return context.builder.CreateCall(function, args);
+  } else {
+    return context.builder.CreateCall(function, args, "calltmp");
+  }
 }
 
 llvm::Value *AST::ArrayExp::codegen(CodeGenContext &context) {
@@ -547,16 +551,19 @@ llvm::Value *AST::FunctionDec::codegen(CodeGenContext &context) {
     }
   }
   if (auto retVal = body_->codegen(context)) {
-    context.builder.CreateRet(retVal);
-    if (!llvm::verifyFunction(*function)) {
-      return context.logErrorV("Function " + name_ + " genteration failed");
+    if (proto_->getResultType()->isVoidTy()) {
+      context.builder.CreateRetVoid();
+    } else {
+      context.builder.CreateRet(context.zero);
     }
-    context.valueDecs.exit();
-    context.builder.SetInsertPoint(oldBB);
-    context.currentFrame = oldFrame;
-    context.staticLink.pop_front();
-    --context.currentLevel;
-    return function;
+    if (!llvm::verifyFunction(*function, &llvm::errs())) {
+      context.valueDecs.exit();
+      context.builder.SetInsertPoint(oldBB);
+      context.currentFrame = oldFrame;
+      context.staticLink.pop_front();
+      --context.currentLevel;
+      return function;
+    }
   }
   context.valueDecs.exit();
   function->eraseFromParent();
@@ -648,5 +655,5 @@ llvm::Value *AST::BinaryExp::codegen(CodeGenContext &context) {
     case XOR:
       return context.builder.CreateXor(L, R, "xortmp");
   }
-  assert(false);
+  return nullptr;
 }

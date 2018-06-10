@@ -51,7 +51,6 @@ SOURCES += \
     src/IDE/compiler.cpp
 
 HEADERS += \
-    src/mainwindow.h \
     src/AST/ast.h \
     src/utils/symboltable.h \
     src/utils/codegencontext.h \
