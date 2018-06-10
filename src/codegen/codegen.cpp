@@ -554,7 +554,7 @@ llvm::Value *AST::FunctionDec::codegen(CodeGenContext &context) {
     if (proto_->getResultType()->isVoidTy()) {
       context.builder.CreateRetVoid();
     } else {
-      context.builder.CreateRet(context.zero);
+      context.builder.CreateRet(retVal);
     }
     if (!llvm::verifyFunction(*function, &llvm::errs())) {
       context.valueDecs.exit();
