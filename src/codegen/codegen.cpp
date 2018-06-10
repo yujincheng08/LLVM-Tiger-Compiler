@@ -586,8 +586,10 @@ llvm::Value *AST::VarDec::read(CodeGenContext &context) const {
   auto staticLink = context.staticLink.begin();
   llvm::Value *value = context.currentFrame;
   while (currentLevel-- > level_) {
-    value = context.builder.CreateGEP(*++staticLink, value, context.zero,
-                                      "staticLink");
+    value =
+        context.builder.CreateGEP(llvm::PointerType::getUnqual(*++staticLink),
+                                  value, context.zero, "staticLink");
+    value = context.builder.CreateLoad(value, "frame");
   }
   return context.builder.CreateGEP(
       type_, value,
