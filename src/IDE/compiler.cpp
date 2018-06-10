@@ -23,4 +23,5 @@ void Compiler::compile(QTreeWidgetItem *view_root, std::string s) {
     CodeGenContext codeGenContext;
     root->codegen(codeGenContext);
   }
+  close(p[0]);
 }

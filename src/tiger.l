@@ -79,7 +79,7 @@ extern "C" int yywrap(void)
 
 \" {ADJ; BEGIN(STR); }
 <STR>{
-        \" 			     {ADJ; tigerlval.sval=new std::string(strbuf.str()); BEGIN(INITIAL); return STRING;}
+        \" 			     {ADJ; tigerlval.sval=new std::string(strbuf.str()); strbuf.clear(); strbuf.str(std::string()); BEGIN(INITIAL); return STRING;}
         \\n			     {ADJ; strbuf << "\n";}
         \\t			     {ADJ; strbuf << "\t";}
     \\^[GHIJLM]	     {ADJ; strbuf<<yytext;}
