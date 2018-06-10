@@ -90,16 +90,15 @@ llvm::Type *AST::SubscriptVar::traverse(vector<VarDec *> &variableTable,
                                         CodeGenContext &context) {
   auto var = var_->traverse(variableTable, context);
   if (!var) return nullptr;
-  if (!var->isPointerTy() || !context.getElementType(var)->isPointerTy() ||
-      context.getElementType(context.getElementType(var))->isStructTy())
+  if (!var->isPointerTy() || context.getElementType(var)->isStructTy())
     return context.logErrorT("Subscript is only for array type.");
   // Ptr to element type
-  auto type = context.getElementType(var);
-  type_ = context.getElementType(type);
+  type_ = context.getElementType(var);
   auto exp = exp_->traverse(variableTable, context);
+  if (!exp) return nullptr;
   if (!exp->isIntegerTy())
     return context.logErrorT("Subscript should be integer");
-  return type;
+  return type_;
 }
 
 void VarExp::print(QTreeWidgetItem *parent, int n) {
@@ -171,8 +170,7 @@ void CallExp::print(QTreeWidgetItem *parent, int n) {
 llvm::Type *CallExp::traverse(vector<VarDec *> &variableTable,
                               CodeGenContext &context) {
   auto function = context.functions[func_];
-  if (!function)
-    return context.logErrorT("Function " + func_ + "undeclared");
+  if (!function) return context.logErrorT("Function " + func_ + "undeclared");
   auto functionType = function->getFunctionType();
   size_t i = 0u;
   if (function->getLinkage() == llvm::Function::ExternalLinkage)
@@ -354,8 +352,7 @@ llvm::Type *IfExp::traverse(vector<VarDec *> &variableTable,
     if (then != elsee)
       return context.logErrorT("Require same type in both branch");
   } else {
-    if (!then->isVoidTy())
-      return context.logErrorT("One branch if should be void");
+    return context.voidType;
   }
   return then;
 }
@@ -398,16 +395,14 @@ llvm::Type *ForExp::traverse(vector<VarDec *> &variableTable,
   if (!low) return nullptr;
   auto high = high_->traverse(variableTable, context);
   if (!high) return nullptr;
-  auto body = body_->traverse(variableTable, context);
-  if (!body) return nullptr;
   if (!low->isIntegerTy() || !high->isIntegerTy())
     return context.logErrorT("For bounds require integer");
-  if (!body->isVoidTy()) return context.logErrorT("Loop body should be void");
   varDec_ = new VarDec(var_, context.intType, variableTable.size(),
                        context.currentLevel);
-  context.valueDecs.push(var_, varDec_);
   variableTable.push_back(varDec_);
-  // TODO: check body void
+  context.valueDecs.push(var_, varDec_);
+  auto body = body_->traverse(variableTable, context);
+  if (!body) return nullptr;
   return context.voidType;
 }
 

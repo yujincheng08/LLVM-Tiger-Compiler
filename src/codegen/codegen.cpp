@@ -52,6 +52,7 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   context.types["string"] = context.stringType;
   context.intrinsic();
   traverse(mainVariableTable_, context);
+  if (context.hasError) return nullptr;
   context.valueDecs.reset();
   context.functionDecs.reset();
   context.builder.SetInsertPoint(block);
@@ -66,6 +67,9 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   root_->codegen(context);
   context.builder.CreateRet(llvm::ConstantInt::get(
       llvm::Type::getInt64Ty(context.context), llvm::APInt(64, 0)));
+  if (!llvm::verifyFunction(*mainFunction)) {
+    return context.logErrorV("Generate fail");
+  }
   // llvm::ReturnInst::Create(context, block);
   std::cout << "Code is generated." << std::endl;
 
@@ -544,7 +548,9 @@ llvm::Value *AST::FunctionDec::codegen(CodeGenContext &context) {
   }
   if (auto retVal = body_->codegen(context)) {
     context.builder.CreateRet(retVal);
-    llvm::verifyFunction(*function);
+    if (!llvm::verifyFunction(*function)) {
+      return context.logErrorV("Function " + name_ + " genteration failed");
+    }
     context.valueDecs.exit();
     context.builder.SetInsertPoint(oldBB);
     context.currentFrame = oldFrame;

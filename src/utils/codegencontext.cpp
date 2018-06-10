@@ -44,6 +44,7 @@ llvm::Value *CodeGenContext::checkStore(llvm::Value *val, llvm::Value *ptr) {
 }
 
 llvm::Value *CodeGenContext::logErrorV(std::string const &msg) {
+  hasError = true;
   std::cerr << msg << std::endl;
   return nullptr;
 }
@@ -88,6 +89,7 @@ bool CodeGenContext::isMatch(llvm::Type *a, llvm::Type *b) {
 }
 
 llvm::Type *CodeGenContext::logErrorT(std::string const &msg) {
+  hasError = true;
   std::cerr << msg << std::endl;
   return nullptr;
 }

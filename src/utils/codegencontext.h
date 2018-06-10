@@ -29,7 +29,8 @@ class FunctionDec;
 }  // namespace AST
 
 class CodeGenContext {
- public:
+public:
+  bool hasError{false};
   llvm::LLVMContext context;
   llvm::IRBuilder<> builder{context};
   std::unique_ptr<llvm::Module> module{
