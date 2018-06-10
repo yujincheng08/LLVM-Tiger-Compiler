@@ -235,9 +235,7 @@ llvm::Value *AST::IfExp::codegen(CodeGenContext &context) {
   auto test = test_->codegen(context);
   if (!test) return nullptr;
 
-  test = context.builder.CreateICmpNE(
-      test, llvm::ConstantInt::get(context.context, llvm::APInt(1, 0)),
-      "iftest");
+  test = context.builder.CreateICmpNE(test, context.zero, "iftest");
   auto function = context.builder.GetInsertBlock()->getParent();
 
   auto thenBB = llvm::BasicBlock::Create(context.context, "then", function);
@@ -640,17 +638,29 @@ llvm::Value *AST::BinaryExp::codegen(CodeGenContext &context) {
               "divftmp"),
           llvm::Type::getInt64Ty(context.context), "divtmp");
     case LTH:
-      return context.builder.CreateICmpSLT(L, R, "cmptmp");
+      return context.builder.CreateZExt(
+          context.builder.CreateICmpSLT(L, R, "cmptmp"), context.intType,
+          "cmptmp");
     case GTH:
-      return context.builder.CreateICmpSGT(L, R, "cmptmp");
+      return context.builder.CreateZExt(
+          context.builder.CreateICmpSGT(L, R, "cmptmp"), context.intType,
+          "cmptmp");
     case EQU:
-      return context.builder.CreateICmpEQ(L, R, "cmptmp");
+      return context.builder.CreateZExt(
+          context.builder.CreateICmpEQ(L, R, "cmptmp"), context.intType,
+          "cmptmp");
     case NEQU:
-      return context.builder.CreateICmpNE(L, R, "cmptmp");
+      return context.builder.CreateZExt(
+          context.builder.CreateICmpNE(L, R, "cmptmp"), context.intType,
+          "cmptmp");
     case LEQ:
-      return context.builder.CreateICmpSLE(L, R, "cmptmp");
+      return context.builder.CreateZExt(
+          context.builder.CreateICmpSLE(L, R, "cmptmp"), context.intType,
+          "cmptmp");
     case GEQ:
-      return context.builder.CreateICmpSGE(L, R, "cmptmp");
+      return context.builder.CreateZExt(
+          context.builder.CreateICmpSGE(L, R, "cmptmp"), context.intType,
+          "cmptmp");
     case AND_:
       return context.builder.CreateAnd(L, R, "andtmp");
     case OR_:
