@@ -30,17 +30,21 @@ llvm::Function *CodeGenContext::createIntrinsicFunction(
 }
 
 llvm::Value *CodeGenContext::checkStore(llvm::Value *val, llvm::Value *ptr) {
-  //  if (isNil(val)) {
-  //    auto type = ptr->getType();
-  //    if ((type->isPointerTy() && getElementType(type)->isPointerTy() &&
-  //         getElementType(getElementType(type))->isStructTy())) {
-  //      val = llvm::ConstantPointerNull::get(
-  //          llvm::cast<llvm::PointerType>(getElementType(type)));
-  //    } else {
-  //      return logErrorV("Nil can only assign to struct type");
-  //    }
-  //  }
+  val = convertNil(val, ptr);
   return builder.CreateStore(val, ptr);
+}
+
+llvm::Value *CodeGenContext::convertNil(llvm::Value *val, llvm::Value *ptr) {
+  if (isNil(val->getType())) {
+    auto type = ptr->getType();
+    if (isRecord(type)) {
+      return llvm::ConstantPointerNull::get(
+          llvm::cast<llvm::PointerType>(type));
+    } else {
+      return logErrorV("Nil can only assign to struct type");
+    }
+  }
+  return val;
 }
 
 llvm::Value *CodeGenContext::logErrorV(std::string const &msg) {

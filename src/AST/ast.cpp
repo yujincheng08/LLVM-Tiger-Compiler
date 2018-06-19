@@ -206,10 +206,34 @@ llvm::Type *BinaryExp::traverse(vector<VarDec *> &variableTable,
   auto left = left_->traverse(variableTable, context);
   auto right = right_->traverse(variableTable, context);
   if (!left || !right) return nullptr;
-  if (left->isIntegerTy() && right->isIntegerTy())
-    return context.intType;
-  else
-    return nullptr;
+  switch (this->op_) {
+    case ADD:
+    case SUB:
+    case MUL:
+    case DIV:
+    case LTH:
+    case GTH:
+    case LEQ:
+    case GEQ: {
+      if (left->isIntegerTy() && right->isIntegerTy())
+        return context.intType;
+      else
+        return context.logErrorT("Binary expression require integers");
+    }
+    case EQU:
+    case NEQU: {
+      if (context.isMatch(left, right)) {
+        if (context.isNil(left) && context.isNil(right))
+          return context.logErrorT("Nil cannot compaire to nil");
+        else
+          return context.intType;
+      } else
+        return context.logErrorT("Binary comparasion type not match");
+    }
+    default:
+      return nullptr;
+  }
+  return nullptr;
 }
 
 llvm::Type *Field::traverse(vector<VarDec *> &variableTable,
@@ -349,7 +373,7 @@ llvm::Type *IfExp::traverse(vector<VarDec *> &variableTable,
   if (else_) {
     auto elsee = else_->traverse(variableTable, context);
     if (!elsee) return nullptr;
-    if (then != elsee)
+    if (!context.isMatch(then, elsee))
       return context.logErrorT("Require same type in both branch");
   } else {
     return context.voidType;

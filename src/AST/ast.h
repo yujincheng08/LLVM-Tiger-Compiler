@@ -142,6 +142,7 @@ class VarExp : public Exp {
 
 class NilExp : public Exp {
   // dummy body
+  llvm::Type *type_{nullptr};
  public:
   NilExp() = default;
   Value *codegen(CodeGenContext &context) override;
@@ -149,6 +150,8 @@ class NilExp : public Exp {
   llvm::Type *traverse(vector<VarDec *> &variableTable,
                        CodeGenContext &context) override;
   void print(QTreeWidgetItem *parent, int n) override;
+
+  void setType(llvm::Type* type){type_ = type;}
 };
 
 class IntExp : public Exp {

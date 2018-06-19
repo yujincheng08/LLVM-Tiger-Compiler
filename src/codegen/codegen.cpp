@@ -64,6 +64,7 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   context.staticLink.front()->setBody(localVar);
   context.currentFrame = context.createEntryBlockAlloca(
       mainFunction, context.staticLink.front(), "mainframe");
+  context.currentLevel = 0;
   root_->codegen(context);
   context.builder.CreateRet(llvm::ConstantInt::get(
       llvm::Type::getInt64Ty(context.context), llvm::APInt(64, 0)));
@@ -213,8 +214,7 @@ llvm::Value *AST::LetExp::codegen(CodeGenContext &context) {
 }
 
 llvm::Value *AST::NilExp::codegen(CodeGenContext &context) {
-  return llvm::ConstantPointerNull::get(
-      llvm::PointerType::getUnqual(llvm::Type::getVoidTy(context.context)));
+  return llvm::ConstantPointerNull::get(context.nilType);
 }
 
 llvm::Value *AST::VarExp::codegen(CodeGenContext &context) {
@@ -269,6 +269,8 @@ llvm::Value *AST::IfExp::codegen(CodeGenContext &context) {
 
   if (else_ && !then->getType()->isVoidTy() && !elsee->getType()->isVoidTy()) {
     auto PN = context.builder.CreatePHI(then->getType(), 2, "iftmp");
+    then = context.convertNil(then, elsee);
+    elsee = context.convertNil(elsee, then);
     PN->addIncoming(then, thenBB);
     PN->addIncoming(elsee, elseBB);
 
@@ -294,11 +296,7 @@ llvm::Value *AST::WhileExp::codegen(CodeGenContext &context) {
   auto test = test_->codegen(context);
   if (!test) return nullptr;
 
-  auto EndCond = context.builder.CreateICmpNE(
-      test,
-      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
-                             llvm::APInt(1, 0)),
-      "loopcond");
+  auto EndCond = context.builder.CreateICmpSLE(test, context.one, "loopcond");
   // auto loopEndBB = context.builder.GetInsertBlock();
 
   // goto after or loop
@@ -646,10 +644,14 @@ llvm::Value *AST::BinaryExp::codegen(CodeGenContext &context) {
           context.builder.CreateICmpSGT(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case EQU:
+      L = context.convertNil(L, R);
+      R = context.convertNil(R, L);
       return context.builder.CreateZExt(
           context.builder.CreateICmpEQ(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case NEQU:
+      L = context.convertNil(L, R);
+      R = context.convertNil(R, L);
       return context.builder.CreateZExt(
           context.builder.CreateICmpNE(L, R, "cmptmp"), context.intType,
           "cmptmp");

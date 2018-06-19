@@ -50,7 +50,7 @@ public:
   llvm::Type *voidType{llvm::Type::getVoidTy(context)};
   llvm::Type *stringType{
       llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(context))};
-  llvm::Type *nilType{
+  llvm::PointerType *nilType{
       llvm::PointerType::getUnqual(llvm::StructType::get(context))};
   // llvm::Type *stringType{llvm::Type::getInt64Ty(context)};
   llvm::Function *allocaArrayFunction{createIntrinsicFunction(
@@ -79,6 +79,7 @@ public:
   bool isRecord(llvm::Type *exp);
   bool isMatch(llvm::Type *a, llvm::Type *b);
   llvm::Value *checkStore(llvm::Value *val, llvm::Value *ptr);
+  llvm::Value *convertNil(llvm::Value *val, llvm::Value *other);
   llvm::Function *createIntrinsicFunction(std::string const &name,
                                           std::vector<llvm::Type *> const &args,
                                           llvm::Type *retType);
