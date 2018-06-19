@@ -636,30 +636,57 @@ llvm::Value *AST::BinaryExp::codegen(CodeGenContext &context) {
               "divftmp"),
           llvm::Type::getInt64Ty(context.context), "divtmp");
     case LTH:
+      if(L->getType() == context.stringType) {
+        L = context.strcmp(L, R);
+        R = context.zero;
+      }
       return context.builder.CreateZExt(
           context.builder.CreateICmpSLT(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case GTH:
+      if(L->getType() == context.stringType) {
+        L = context.strcmp(L, R);
+        R = context.zero;
+      }
       return context.builder.CreateZExt(
           context.builder.CreateICmpSGT(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case EQU:
       L = context.convertNil(L, R);
       R = context.convertNil(R, L);
+      if(L->getType() == context.stringType) {
+        L = context.strcmp(L, R);
+        R = context.zero;
+      }
       return context.builder.CreateZExt(
           context.builder.CreateICmpEQ(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case NEQU:
       L = context.convertNil(L, R);
       R = context.convertNil(R, L);
+      if(L->getType() == context.stringType) {
+        L = context.strcmp(L, R);
+        R = context.zero;
+      }
+      if(L->getType() == context.stringType) {
+        return context.strcmp(L, R);
+      }
       return context.builder.CreateZExt(
           context.builder.CreateICmpNE(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case LEQ:
+      if(L->getType() == context.stringType) {
+        L = context.strcmp(L, R);
+        R = context.zero;
+      }
       return context.builder.CreateZExt(
           context.builder.CreateICmpSLE(L, R, "cmptmp"), context.intType,
           "cmptmp");
     case GEQ:
+      if(L->getType() == context.stringType) {
+        L = context.strcmp(L, R);
+        R = context.zero;
+      }
       return context.builder.CreateZExt(
           context.builder.CreateICmpSGE(L, R, "cmptmp"), context.intType,
           "cmptmp");

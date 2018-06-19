@@ -64,4 +64,8 @@ void exit_(int i) {
   exit(i);
 }
 
+int strcmp_(char *a, char *b) {
+  return std::strcmp(a, b);
+}
+
 }

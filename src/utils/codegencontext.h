@@ -29,7 +29,7 @@ class FunctionDec;
 }  // namespace AST
 
 class CodeGenContext {
-public:
+ public:
   bool hasError{false};
   llvm::LLVMContext context;
   llvm::IRBuilder<> builder{context};
@@ -60,6 +60,8 @@ public:
   llvm::Function *allocaRecordFunction = {
       createIntrinsicFunction("allocaRecord", {llvm::Type::getInt64Ty(context)},
                               llvm::Type::getInt8PtrTy(context))};
+  llvm::Function *strCmpFunction = {
+      createIntrinsicFunction("strcmp_", {stringType, stringType}, intType)};
   std::stack<
       std::tuple<llvm::BasicBlock * /*next*/, llvm::BasicBlock * /*after*/>>
       loopStack;
@@ -83,7 +85,7 @@ public:
   llvm::Function *createIntrinsicFunction(std::string const &name,
                                           std::vector<llvm::Type *> const &args,
                                           llvm::Type *retType);
-
+  llvm::Value *strcmp(llvm::Value *a, llvm::Value *b);
   void intrinsic();
   llvm::Type *logErrorT(std::string const &msg);
 

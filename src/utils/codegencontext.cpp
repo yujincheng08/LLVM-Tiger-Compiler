@@ -29,6 +29,11 @@ llvm::Function *CodeGenContext::createIntrinsicFunction(
   return function;
 }
 
+llvm::Value *CodeGenContext::strcmp(llvm::Value *a, llvm::Value *b) {
+  return builder.CreateCall(strCmpFunction, std::vector<llvm::Value *>{a, b},
+                            "strcmp");
+}
+
 llvm::Value *CodeGenContext::checkStore(llvm::Value *val, llvm::Value *ptr) {
   val = convertNil(val, ptr);
   return builder.CreateStore(val, ptr);
