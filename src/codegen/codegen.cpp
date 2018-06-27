@@ -296,11 +296,11 @@ llvm::Value *AST::WhileExp::codegen(CodeGenContext &context) {
   auto test = test_->codegen(context);
   if (!test) return nullptr;
 
-  auto EndCond = context.builder.CreateICmpSLE(test, context.one, "loopcond");
+  auto EndCond = context.builder.CreateICmpEQ(test, context.zero, "loopcond");
   // auto loopEndBB = context.builder.GetInsertBlock();
 
   // goto after or loop
-  context.builder.CreateCondBr(EndCond, loopBB, afterBB);
+  context.builder.CreateCondBr(EndCond, afterBB, loopBB);
 
   context.builder.SetInsertPoint(loopBB);
 
