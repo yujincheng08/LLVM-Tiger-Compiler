@@ -1,20 +1,19 @@
-#include <AST/ast.h>
-#include <QApplication>
+#include "AST/ast.h"
 #include <iostream>
-#include "IDE/mainwindow.h"
+
+extern int tigerparse();
+extern std::unique_ptr<AST::Root> root;
 
 int main(int argc, char *argv[]) {
-  QApplication a(argc, argv);
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
+  llvm::InitializeNativeTargetAsmParser();
 
-  //引入样式表
-  QFile qss(":/style.qss");  //用相对路径
-  qss.open(QFile::ReadOnly);
-  qApp->setStyleSheet(qss.readAll());
-  qss.close();
+  tigerparse();
 
-  MainWindow w;
-  w.show();
-
-  return a.exec();
+  if (root) {
+    CodeGenContext codeGenContext;
+    root->codegen(codeGenContext);
+  }
   return 0;
 }

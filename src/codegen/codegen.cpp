@@ -87,7 +87,7 @@ llvm::Value *AST::Root::codegen(CodeGenContext &context) {
   auto fileType = llvm::TargetMachine::CGFT_ObjectFile;
 
   std::cout << "done." << std::endl;
-  if (targetMachine->addPassesToEmitFile(pm, dest, fileType)) {
+  if (targetMachine->addPassesToEmitFile(pm, dest, nullptr, fileType)) {
     llvm::errs() << "TheTargetMachine can't emit a file of this type";
     return nullptr;
   }
