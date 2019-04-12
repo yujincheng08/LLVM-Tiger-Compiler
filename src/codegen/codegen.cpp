@@ -603,11 +603,12 @@ llvm::Value *AST::VarDec::read(CodeGenContext &context) const {
                                   value, context.zero, "staticLink");
     value = context.builder.CreateLoad(value, "frame");
   }
-  return context.builder.CreateGEP(
-      type_, value,
-      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
-                             llvm::APInt(64, offset_)),
-      name_);
+  std::vector<llvm::Value*> indices(2);
+  indices[0] = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
+                             llvm::APInt(32, 0));
+  indices[1] = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context),
+                             llvm::APInt(32, offset_));
+  return context.builder.CreateGEP(*staticLink, value, indices, name_);
 }
 
 llvm::Value *AST::TypeDec::codegen(CodeGenContext &context) {
