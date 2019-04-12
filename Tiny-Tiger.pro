@@ -4,17 +4,12 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
-
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+QT       -= gui core
 
 LLVM = llvm-config
 
 TARGET = Tiny-Tiger
 TEMPLATE = app
-
-# INCLUDEPATH += /usr/local/Cellar/llvm/6.0.0/include
-# LIBS += -L"/usr/local/Cellar/llvm/6.0.0/lib" -lllvm
 
 INCLUDEPATH += $$system($$LLVM --includedir)
 
@@ -45,25 +40,16 @@ SOURCES += \
     src/codegen/codegen.cpp \
     src/utils/symboltable.cpp \
     src/utils/runtime.cpp \
-    src/utils/codegencontext.cpp \
-    src/IDE/highlighter.cpp \
-    src/IDE/mainwindow.cpp \
-    src/IDE/compiler.cpp
+    src/utils/codegencontext.cpp
 
 HEADERS += \
     src/AST/ast.h \
     src/utils/symboltable.h \
-    src/utils/codegencontext.h \
-    src/IDE/highlighter.h \
-    src/IDE/mainwindow.h \
-    src/IDE/compiler.h
+    src/utils/codegencontext.h
 
 OTHER_FILES += \
     src/tiger.l \
     src/tiger.y
-
-FORMS += \
-    src/IDE/mainwindow.ui
 
 RESOURCES += \
     res/res.qrc
